@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Chat</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
+        #chatbox { height: 400px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background-color: #fff; }
+        .message { margin-bottom: 10px; padding: 8px; border-radius: 5px; }
+        .user-message { background-color: #e1f5fe; text-align: right; margin-left: 40px; }
+        .bot-message { background-color: #f0f0f0; margin-right: 40px; white-space: pre-wrap; /* Preserve whitespace/newlines */ }
+        .error-message { background-color: #ffebee; color: #c62828; border: 1px solid #c62828; padding: 8px; margin-right: 40px;}
+        .context-warning { background-color: #fff9c4; color: #795548; border: 1px solid #fbc02d; font-size: 0.9em; margin-top: -5px; margin-bottom: 5px; padding: 5px; margin-right: 40px;}
+        #input-area { display: flex; }
+        #message-input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 3px; }
+        #send-button { padding: 10px 15px; margin-left: 10px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        #send-button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .timestamp { font-size: 0.7em; color: #888; display: block; margin-top: 3px; }
+        #thinking { margin-left: 5px; display: none; font-style: italic; color: #555 } /* Initially hidden */
+    </style>
+</head>
+<body>
+    <h1>Gemini Chat Interface</h1>
+    <div id="chatbox">
+        {% for msg in history %}
+            <div class="message user-message">
+                {{ msg.user_message }}
+                <span class="timestamp">{{ msg.timestamp.split('.')[0] }}</span> {# Basic timestamp formatting #}
+            </div>
+            <div class="message bot-message">
+                {{ msg.bot_response }}
+                 <span class="timestamp">{{ msg.timestamp.split('.')[0] }}</span> {# Use same timestamp for simplicity #}
+           </div>
+        {% endfor %}
+        {# Placeholder for new messages #}
+        <div id="message-anchor"></div>
+    </div>
+    <div id="input-area">
+        <input type="text" id="message-input" placeholder="Type your message (use @ {path} for context)..." autocomplete="off">
+        <button id="send-button">Send</button>
+        <span id="thinking">Thinking...</span>
+    </div>
+
+    <script>
+        const chatbox = document.getElementById('chatbox');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const thinkingIndicator = document.getElementById('thinking');
+        const messageAnchor = document.getElementById('message-anchor'); // Target for new messages
+
+        function addMessage(text, type, timestamp = null) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', type);
+            // Use textContent to prevent basic HTML injection issues
+            messageDiv.textContent = text;
+
+            if (timestamp) {
+                const timeSpan = document.createElement('span');
+                timeSpan.classList.add('timestamp');
+                // Basic formatting, adjust as needed
+                timeSpan.textContent = new Date(timestamp).toLocaleString().replace(/:\d{2}\s/, ' ');
+                messageDiv.appendChild(timeSpan);
+            }
+
+            // Insert before the anchor to keep the input area at the bottom
+            chatbox.insertBefore(messageDiv, messageAnchor);
+            // Scroll to the anchor (which should be the bottom)
+            messageAnchor.scrollIntoView({ behavior: 'smooth' });
+            return messageDiv; // Return the created div
+        }
+
+        function addBotMessageChunk(text, botMessageDiv) {
+            // Append text, preserving existing newlines and adding new ones
+            // Using textContent handles newlines correctly within the pre-wrap style
+            botMessageDiv.textContent += text;
+            messageAnchor.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            addMessage(message, 'user-message', new Date()); // Add user message immediately
+            messageInput.value = ''; // Clear input
+            sendButton.disabled = true; // Disable button while processing
+            thinkingIndicator.style.display = 'inline'; // Show thinking indicator
+
+            let currentBotMessageDiv = null; // To hold the div for the streaming bot response
+
+            try {
+                // Use EventSource for simpler SSE handling
+                const eventSource = new EventSource(`/chat?message=${encodeURIComponent(message)}`); // Send message via query param for GET request SSE
+
+                // It's better practice to use POST for actions that change state (like sending a message and storing history)
+                // Let's stick to the POST request and handle the stream manually as planned before.
+
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+
+
+                if (!response.ok) {
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                    } catch (e) {
+                        errorData = { error: `HTTP error ${response.status}: ${response.statusText}` };
+                    }
+                    addMessage(`Error: ${errorData.error || 'Unknown server error'}`, 'error-message');
+                    return;
+                }
+
+                if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
+                     addMessage('Error: Expected a streaming response, but received something else.', 'error-message');
+                     return;
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                // Create the initial bot message div (empty)
+                currentBotMessageDiv = document.createElement('div');
+                currentBotMessageDiv.classList.add('message', 'bot-message');
+                // Add timestamp placeholder now
+                const timeSpan = document.createElement('span');
+                timeSpan.classList.add('timestamp');
+                timeSpan.textContent = new Date().toLocaleString().replace(/:\d{2}\s/, ' '); // Add time when response starts
+                currentBotMessageDiv.appendChild(timeSpan); // Append timestamp first
+                chatbox.insertBefore(currentBotMessageDiv, messageAnchor); // Add div to chatbox
+
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        console.log('Stream finished.');
+                        break;
+                    }
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n'); // SSE messages end with \n\n
+
+                    // Process all complete messages in the buffer
+                    for (let i = 0; i < lines.length - 1; i++) {
+                        const line = lines[i];
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const jsonData = JSON.parse(line.substring(6)); // Remove 'data: ' prefix
+
+                                if (jsonData.text) {
+                                    addBotMessageChunk(jsonData.text, currentBotMessageDiv);
+                                } else if (jsonData.context_error) {
+                                    // Display context errors separately
+                                    addMessage(`Context Warning: ${jsonData.context_error}`, 'context-warning');
+                                } else if (jsonData.error) {
+                                    // Display general errors separately
+                                    addMessage(`Stream Error: ${jsonData.error}`, 'error-message');
+                                } else if (jsonData.end_stream) {
+                                    console.log('End of stream signal received.');
+                                    // Optional: Add final timestamp or indicator
+                                }
+                            } catch (e) {
+                                console.error('Error parsing SSE data:', e, 'Raw line:', line);
+                                addMessage(`Error: Could not parse response chunk.`, 'error-message');
+                            }
+                        }
+                    }
+                    // Keep the last incomplete message (if any) in the buffer
+                    buffer = lines[lines.length - 1];
+                }
+
+            } catch (error) {
+                console.error('Fetch error:', error);
+                addMessage(`Network or connection error: ${error.message}`, 'error-message');
+                if (currentBotMessageDiv) {
+                    currentBotMessageDiv.textContent += " (Connection failed)"; // Indicate failure in the message div
+                }
+            } finally {
+                sendButton.disabled = false; // Re-enable button
+                thinkingIndicator.style.display = 'none'; // Hide thinking indicator
+                messageAnchor.scrollIntoView({ behavior: 'smooth' }); // Ensure scrolled to bottom
+            }
+        }
+
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Initial scroll to bottom
+        window.onload = () => {
+            messageAnchor.scrollIntoView();
+        }
+
+    </script>
+</body>
+</html>
