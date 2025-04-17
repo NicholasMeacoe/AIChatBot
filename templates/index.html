@@ -1,46 +1,362 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gemini Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Mermaid JS (added for diagram rendering) -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
-        #chatbox { height: 400px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background-color: #fff; }
-        .message { margin-bottom: 10px; padding: 8px; border-radius: 5px; }
-        .user-message { background-color: #e1f5fe; text-align: right; margin-left: 40px; }
-        .bot-message { background-color: #f0f0f0; margin-right: 40px; white-space: pre-wrap; /* Preserve whitespace/newlines */ }
-        .error-message { background-color: #ffebee; color: #c62828; border: 1px solid #c62828; padding: 8px; margin-right: 40px;}
-        .context-warning { background-color: #fff9c4; color: #795548; border: 1px solid #fbc02d; font-size: 0.9em; margin-top: -5px; margin-bottom: 5px; padding: 5px; margin-right: 40px;}
-        #input-area { display: flex; }
-        #message-input { flex-grow: 1; padding: 10px; border: 1px solid #ccc; border-radius: 3px; }
-        #send-button { padding: 10px 15px; margin-left: 10px; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
-        #send-button:disabled { background-color: #ccc; cursor: not-allowed; }
-        .timestamp { font-size: 0.7em; color: #888; display: block; margin-top: 3px; }
-        #thinking { margin-left: 5px; display: none; font-style: italic; color: #555 } /* Initially hidden */
+        :root {
+            --bg-color: #f8f9fa;
+            --chatbox-bg: #ffffff;
+            --border-color: #dee2e6;
+            --text-color: #212529;
+            --secondary-text: #6c757d;
+            --user-msg-bg: linear-gradient(135deg, #007bff, #0056b3);
+            --bot-msg-bg: #e9ecef;
+            --bot-msg-text: #343a40;
+            --error-bg: #f8d7da;
+            --error-text: #721c24;
+            --error-border: #f5c6cb;
+            --warning-bg: #fff3cd;
+            --warning-text: #856404;
+            --warning-border: #ffeeba;
+            --button-bg: #007bff;
+            --button-hover-bg: #0056b3;
+            --button-disabled-bg: #ced4da;
+            --input-border: #ced4da;
+            --font-family: 'Inter', sans-serif; /* Keep font */
+            --user-msg-bg: linear-gradient(135deg, #007bff, #0056b3); /* Keep user message gradient */
+        }
+
+        /* Keep body font */
+        body {
+            font-family: var(--font-family);
+            /* background-color removed, will inherit from data-bs-theme */
+        }
+
+        /* Custom message bubble styles */
+        .message {
+            margin-bottom: 0.75rem; /* Bootstrap spacing */
+            padding: 0.6rem 1rem; /* Adjust padding */
+            border-radius: 1.1rem; /* More rounded */
+            max-width: 75%;
+            word-wrap: break-word;
+            position: relative;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        }
+
+        .user-message {
+            background: var(--user-msg-bg);
+            color: white;
+            margin-left: auto; /* Push to the right */
+            border-bottom-right-radius: 0.3rem; /* Slightly flatten corner */
+        }
+
+            /* Adjust bot message width for diagrams */
+        .bot-message {
+            background-color: var(--bs-secondary-bg);
+            color: var(--bs-body-color);
+            margin-right: auto;
+            white-space: pre-wrap;
+            border-bottom-left-radius: 0.3rem;
+            max-width: 90%; /* Increase from 75% to 90% */
+            width: 90%; /* Add explicit width */
+        }
+
+        /* Add specific Mermaid diagram styling */
+        .bot-message .mermaid {
+            width: 100%;
+            min-width: 200px;
+            margin: 1rem 0;
+        }
+
+        .bot-message .mermaid svg {
+            width: 100% !important;
+            height: auto !important;
+            max-width: none !important;
+        }
+
+        /* Keep error and warning styles (can be replaced with Bootstrap alerts later if desired) */
+         .error-message {
+            background-color: var(--error-bg);
+            color: var(--error-text);
+            border: 1px solid var(--error-border);
+            padding: 10px 15px;
+            margin-right: auto; /* Align left */
+            border-radius: 8px;
+            max-width: 75%;
+        }
+
+        .context-warning {
+            background-color: var(--warning-bg);
+            color: var(--warning-text);
+            border: 1px solid var(--warning-border);
+            font-size: 0.9em;
+            margin-top: -5px;
+            margin-bottom: 8px;
+            padding: 8px 12px;
+            margin-right: auto; /* Align left */
+            border-radius: 8px;
+            max-width: 75%;
+        }
+
+
+        /* Custom timestamp */
+        .timestamp {
+            font-size: 0.75em;
+            color: var(--bs-secondary-color); /* Use theme's secondary color */
+            display: block;
+            margin-top: 0.3rem;
+            text-align: inherit;
+        }
+        .user-message .timestamp {
+             color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* Keep thinking indicator styles */
+        #thinking {
+            margin-left: 10px;
+            display: none;
+            font-style: italic;
+            color: #6c757d; /* Bootstrap secondary text */
+        }
+        #thinking span {
+            display: inline-block;
+            animation: blink 1.4s infinite both;
+            font-size: 1.5em;
+            line-height: 0.5;
+        }
+        #thinking span:nth-child(2) { animation-delay: 0.2s; }
+        #thinking span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes blink {
+            0% { opacity: 0.2; }
+            20% { opacity: 1; }
+            100% { opacity: 0.2; }
+        }
+
+        /* Custom date header */
+        .date-header {
+            text-align: center;
+            margin: 1rem 0 0.75rem 0;
+            font-weight: 500;
+            color: var(--bs-secondary-color); /* Use theme's secondary color */
+            font-size: 0.9em;
+            border-bottom: 1px solid var(--bs-border-color); /* Use theme's border color */
+            padding-bottom: 0.3rem;
+        }
+
+        /* Adjust scrollbar for dark theme */
+        #chatbox::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chatbox::-webkit-scrollbar-track {
+            background: var(--bs-body-bg); /* Use theme's body background */
+            border-radius: 4px;
+        }
+        #chatbox::-webkit-scrollbar-thumb {
+            background-color: var(--bs-secondary-bg); /* Use theme's secondary background */
+            border-radius: 4px;
+            border: 2px solid var(--bs-body-bg); /* Use theme's body background */
+        }
+        #chatbox::-webkit-scrollbar-thumb:hover {
+            background-color: var(--bs-tertiary-bg); /* Use theme's tertiary background */
+        }
+
+        /* Keep fade-in animation */
+        .message-fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Context Menu - Use Bootstrap dropdown styles */
+        #context-menu {
+            position: absolute; /* Keep positioning logic in JS */
+            z-index: 1000;
+            display: none; /* Controlled by JS */
+            min-width: 180px;
+            /* Inherits dropdown-menu styles from Bootstrap */
+        }
+        .context-menu-item {
+            /* Use dropdown-item styles */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .context-menu-item .icon {
+            margin-left: 10px;
+            font-weight: bold;
+            transition: transform 0.2s ease-in-out;
+        }
+         .context-menu-item .icon.expanded {
+            transform: rotate(45deg);
+        }
+        .context-submenu {
+            display: none; /* Controlled by JS */
+            max-height: 200px;
+            overflow-y: auto;
+            border-top: 1px solid #dee2e6; /* Bootstrap border */
+            background-color: #fdfdfd; /* Slightly different bg */
+            padding: 0.25rem 0; /* Add some padding */
+        }
+        .context-submenu-item {
+             /* Use dropdown-item styles, maybe slightly smaller */
+            padding: 0.25rem 1rem 0.25rem 1.5rem; /* Indent */
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #url-input-container {
+            padding: 0.5rem;
+            border-top: 1px solid #dee2e6; /* Bootstrap border */
+        }
+        /* #url-input and #url-confirm-button will get Bootstrap classes directly */
+
     </style>
 </head>
-<body>
-    <h1>Gemini Chat Interface</h1>
-    <div id="chatbox">
+<body class="d-flex flex-column vh-100 p-3"> <!-- Use Flexbox for layout -->
+    <h1 class="text-center mb-3">Gemini Chat</h1> <!-- Simplified Title -->
+
+    <!-- Controls Row -->
+    <div class="d-flex justify-content-center align-items-center mb-3 gap-3 flex-wrap"> <!-- Flexbox for centering and spacing, allow wrapping -->
+        <!-- Date Selection Dropdown -->
+        <div class="d-flex align-items-center gap-2">
+            <label for="date-select" class="form-label mb-0">History:</label> <!-- Bootstrap form label -->
+            <select id="date-select" class="form-select form-select-sm w-auto"> <!-- Bootstrap form select -->
+                <option value="">All History</option> {# Option to show all #}
+                {% for date in available_dates %}
+                    <option value="{{ date }}" {% if date == selected_date %}selected{% endif %}>
+                        {{ date }}
+                    </option>
+                {% endfor %}
+            </select>
+            <button id="delete-history-button" class="btn btn-sm btn-outline-danger" disabled>Delete</button> <!-- Bootstrap button -->
+        </div>
+
+        <!-- Model Selection Dropdown -->
+        <div class="d-flex align-items-center gap-2">
+            <label for="model-select" class="form-label mb-0">Model:</label>
+            <select id="model-select" class="form-select form-select-sm w-auto">
+                {% for model_name in available_models %}
+                    {# Extract the user-friendly part after 'models/' #}
+                    {% set display_name = model_name.split('/')[-1] %}
+                    <option value="{{ model_name }}" {% if model_name == default_model %}selected{% endif %}>
+                        {{ display_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <!-- End Controls Row -->
+
+    <div id="chatbox" class="flex-grow-1 overflow-auto border rounded p-3 mb-3 shadow-sm"> <!-- Removed bg-white -->
         {% for msg in history %}
-            <div class="message user-message">
-                {{ msg.user_message }}
-                <span class="timestamp">{{ msg.timestamp.split('.')[0] }}</span> {# Basic timestamp formatting #}
+            {# Add a header if the date changes or it's the first message #}
+            {% if loop.first or msg.timestamp.split(' ')[0] != loop.previtem.timestamp.split(' ')[0] %}
+                <div class="date-header"> <!-- Keep custom class for specific styling -->
+                    {{ msg.timestamp.split(' ')[0] }} {# Display Date #}
             </div>
-            <div class="message bot-message">
-                {{ msg.bot_response }}
-                 <span class="timestamp">{{ msg.timestamp.split('.')[0] }}</span> {# Use same timestamp for simplicity #}
-           </div>
+            {% endif %}
+            {# Render User Message #}
+            <div class="d-flex justify-content-end mb-3">
+                <div class="message user-message">
+                    {{ msg.user_message }}
+                    <span class="timestamp">{{ msg.timestamp.split('.')[0] }}</span>
+                </div>
+            </div>
+            {# Render Bot Response #}
+            <div class="d-flex justify-content-start mb-3">
+                 <div class="message bot-message">
+                     {{ msg.bot_response | safe }} {# Use safe filter if bot response contains HTML #}
+                     <span class="timestamp">{{ msg.timestamp.split('.')[0] }}</span> {# Use same timestamp for simplicity #}
+                 </div>
+            </div>
         {% endfor %}
         {# Placeholder for new messages #}
         <div id="message-anchor"></div>
     </div>
-    <div id="input-area">
-        <input type="text" id="message-input" placeholder="Type your message (use @ {path} for context)..." autocomplete="off">
-        <button id="send-button">Send</button>
-        <span id="thinking">Thinking...</span>
+
+    <!-- Active Context Area -->
+    <div id="active-context-area" class="mb-2 p-2 border rounded shadow-sm" style="display: none;"> <!-- Hidden by default -->
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <small class="text-muted fw-bold">Active Context:</small>
+            <button id="clear-context-button" class="btn btn-sm btn-outline-warning py-0 px-1" title="Clear All Context">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-x-lg" viewBox="0 0 16 16">
+                  <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z"/>
+                </svg>
+                Clear All
+            </button>
+        </div>
+        <div id="active-context-list" class="list-group list-group-flush small">
+            <!-- Active context items will be added here by JS -->
+        </div>
     </div>
+    <!-- End Active Context Area -->
+
+    <div id="input-area" class="d-flex gap-2 p-2 border rounded shadow-sm"> <!-- Removed bg-light -->
+        <input type="text" id="message-input" class="form-control" placeholder="Type your message (use @ {path} for context)..." autocomplete="off"> <!-- Bootstrap form control -->
+        <button id="send-button" class="btn btn-primary btn-lg rounded-circle p-0 d-flex align-items-center justify-content-center" title="Send Message" style="width: 44px; height: 44px;"> <!-- Bootstrap button -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-send-fill" viewBox="0 0 16 16">
+              <path d="M15.964.686a.5.5 0 0 0-.65-.65L.767 5.855H.766l-.452.18a.5.5 0 0 0-.082.887l.41.26.001.002 4.995 3.178 3.178 4.995.002.001.26.41a.5.5 0 0 0 .886-.083l6-15Zm-1.833 1.89L6.637 10.07l-.215-.338a.5.5 0 0 0-.154-.154l-.338-.215 7.494-7.494 1.178-.471-.47 1.178Z"/>
+            </svg>
+        </button>
+        <button id="summarize-context-button" class="btn btn-secondary btn-sm ms-2" title="Summarize Active Context"> <!-- Added Summarize Button -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-body-text" viewBox="0 0 16 16">
+              <path fill-rule="evenodd" d="M0 .5A.5.5 0 0 1 .5 0h4a.5.5 0 0 1 0 1h-4A.5.5 0 0 1 0 .5m0 2A.5.5 0 0 1 .5 2h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5m9 0a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5m-9 2A.5.5 0 0 1 .5 4h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5m5 0a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m-5 2A.5.5 0 0 1 .5 6h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5m8 0a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m-8 2A.5.5 0 0 1 .5 8h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m7 0a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5m-7 2a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 0 1h-8a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5"/>
+            </svg>
+        </button>
+        <div id="thinking" class="align-self-center" style="display: none;"><span>.</span><span>.</span><span>.</span></div> <!-- Updated Thinking Indicator -->
+    </div>
+    <!-- Context Menu -->
+    <div id="context-menu" class="dropdown-menu shadow"> <!-- Bootstrap dropdown menu styling -->
+        <div class="context-menu-item dropdown-item" data-type="files"> <!-- Add dropdown-item -->
+            <span>Files</span>
+            <span class="icon">+</span>
+        </div>
+        <div class="context-submenu" id="files-submenu"></div> <!-- Submenu items added dynamically -->
+        <div class="context-menu-item dropdown-item" data-type="folders"> <!-- Add dropdown-item -->
+            <span>Folders</span>
+            <span class="icon">+</span>
+        </div>
+        <div class="context-submenu" id="folders-submenu"></div> <!-- Submenu items added dynamically -->
+        <div class="context-menu-item dropdown-item" data-type="url"> <!-- Add dropdown-item -->
+            <span>Url</span>
+            <span class="icon">+</span>
+        </div>
+        <div class="context-submenu" id="url-submenu">
+            <div id="url-input-container" class="p-2"> <!-- Bootstrap padding -->
+                <input type="text" id="url-input" class="form-control form-control-sm mb-1" placeholder="Enter URL..."> <!-- Bootstrap form control -->
+                <button id="url-confirm-button" class="btn btn-primary btn-sm">Add</button> <!-- Bootstrap button -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Image to PDF Conversion Area -->
+    <div id="pdf-conversion-area" class="mt-3 p-3 border rounded shadow-sm d-flex flex-column gap-2"> <!-- Removed bg-light -->
+        <div class="d-flex align-items-center gap-2 flex-wrap"> <!-- Inner div for row layout -->
+            <label for="image-input" class="form-label mb-0">Convert JPEGs to PDF:</label>
+            <input type="file" id="image-input" class="form-control form-control-sm flex-grow-1" accept=".jpeg,.jpg" multiple> <!-- Bootstrap form control -->
+            <button id="convert-button" class="btn btn-sm btn-success">Convert & Download</button> <!-- Bootstrap button -->
+        </div>
+        <div class="form-check"> <!-- Bootstrap form check -->
+             <input class="form-check-input" type="checkbox" id="ocr-checkbox" name="ocr">
+             <label class="form-check-label text-muted small" for="ocr-checkbox">Make text selectable (OCR)? (Requires Tesseract)</label>
+        </div>
+        <span id="conversion-status" class="text-muted small" style="min-height: 1.2em;"></span> <!-- Added min-height -->
+    </div>
+    <!-- End Image to PDF Conversion Area -->
 
     <script>
         const chatbox = document.getElementById('chatbox');
@@ -48,40 +364,211 @@
         const sendButton = document.getElementById('send-button');
         const thinkingIndicator = document.getElementById('thinking');
         const messageAnchor = document.getElementById('message-anchor'); // Target for new messages
+        const dateSelect = document.getElementById('date-select');
+        const imageInput = document.getElementById('image-input');
+        const convertButton = document.getElementById('convert-button');
+        const conversionStatus = document.getElementById('conversion-status');
+        const ocrCheckbox = document.getElementById('ocr-checkbox'); // Get OCR checkbox
+        const deleteHistoryButton = document.getElementById('delete-history-button'); // Get Delete button
+        const contextMenu = document.getElementById('context-menu'); // Get context menu
+        const filesSubmenu = document.getElementById('files-submenu');
+        const foldersSubmenu = document.getElementById('folders-submenu');
+        const urlSubmenu = document.getElementById('url-submenu');
+        const urlInput = document.getElementById('url-input');
+        const urlConfirmButton = document.getElementById('url-confirm-button');
+        const summarizeContextButton = document.getElementById('summarize-context-button'); // Get Summarize button
+        const activeContextArea = document.getElementById('active-context-area'); // Get context area
+        const activeContextList = document.getElementById('active-context-list'); // Get context list
+        const clearContextButton = document.getElementById('clear-context-button'); // Get clear button
+        const modelSelect = document.getElementById('model-select'); // Get model select dropdown
 
-        function addMessage(text, type, timestamp = null) {
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('message', type);
-            // Use textContent to prevent basic HTML injection issues
-            messageDiv.textContent = text;
+        let contextMenuVisible = false;
+        let atSymbolPosition = -1; // Store position where '@' was typed
+        let activeContextItems = []; // Array to store active context paths/URLs
 
-            if (timestamp) {
-                const timeSpan = document.createElement('span');
-                timeSpan.classList.add('timestamp');
-                // Basic formatting, adjust as needed
-                timeSpan.textContent = new Date(timestamp).toLocaleString().replace(/:\d{2}\s/, ' ');
-                messageDiv.appendChild(timeSpan);
-            }
+        // Initialize Mermaid for diagram rendering
+        mermaid.initialize({ startOnLoad: false, theme: 'dark' }); // Initialize manually, set dark theme
 
-            // Insert before the anchor to keep the input area at the bottom
-            chatbox.insertBefore(messageDiv, messageAnchor);
-            // Scroll to the anchor (which should be the bottom)
-            messageAnchor.scrollIntoView({ behavior: 'smooth' });
-            return messageDiv; // Return the created div
+        // function renderMermaidDiagrams(element) {
+        //     // Find potential mermaid blocks within the provided element
+        //     // Mermaid expects the code directly inside a div.mermaid
+        //     const mermaidPres = element.querySelectorAll('pre code.language-mermaid');
+        //     if (mermaidPres.length > 0) {
+        //         mermaidPres.forEach(block => {
+        //             const preElement = block.parentNode;
+        //             const mermaidContainer = document.createElement('div');
+        //             mermaidContainer.classList.add('mermaid');
+        //             mermaidContainer.textContent = block.textContent || ''; // Get the code content
+        //             preElement.parentNode.replaceChild(mermaidContainer, preElement); // Replace <pre> with <div class="mermaid">
+        //         });
+
+        //         // Run Mermaid on the newly created divs within the element
+        //         try {
+        //              // Use mermaid.run() which is suitable for dynamically added elements
+        //              mermaid.run({ nodes: element.querySelectorAll('.mermaid') });
+        //              console.log("Mermaid rendered in element:", element);
+        //         } catch (e) {
+        //             console.error("Mermaid rendering error:", e);
+        //             // Optionally display an error message within the diagram container
+        //             element.querySelectorAll('.mermaid').forEach(div => {
+        //                 // Check if it hasn't been processed or already contains an error
+        //                 if (!div.hasAttribute('data-processed') && !div.querySelector('.alert-danger')) {
+        //                     div.innerHTML = `<div class="alert alert-danger alert-sm p-1 m-0">Mermaid Error: ${e.message}</div>`;
+        //                 }
+        //             });
+        //         }
+        //     }
+        // }
+
+        function htmlEncode(str) {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
-        function addBotMessageChunk(text, botMessageDiv) {
-            // Append text, preserving existing newlines and adding new ones
-            // Using textContent handles newlines correctly within the pre-wrap style
-            botMessageDiv.textContent += text;
+        function renderMermaidDiagrams(element) {
+            // First, look for text content that contains ```mermaid blocks
+            const textNodes = Array.from(element.querySelectorAll('.bot-message')).map(node => node.textContent);
+            
+            textNodes.forEach(text => {
+                // Find all occurrences of mermaid diagrams using regex
+                const mermaidPattern = /```mermaid\n([\s\S]*?)```/g;
+                let matches = [...text.matchAll(mermaidPattern)];
+                
+                if (matches.length > 0) {
+                    matches.forEach(match => {
+                        // Create a new div for each mermaid diagram
+                        const mermaidContainer = document.createElement('div');
+                        mermaidContainer.classList.add('mermaid');
+                        mermaidContainer.textContent = match[1].trim(); // Extract diagram content between tags
+                        
+                        // Replace the original ```mermaid...``` block with the new div
+                        const newHtml = element.innerHTML.replace(
+                            htmlEncode(match[0]), // Encode the original match[0],
+                            mermaidContainer.outerHTML
+                        )
+                        element.innerHTML = newHtml; // Update the inner HTML of the element
+                    });
+
+                    // Run mermaid on the newly created divs
+                    try {
+                        mermaid.initialize({
+                            startOnLoad: false,
+                            theme: 'dark',
+                            htmlLabels: true,
+                            flowchart: {
+                                useMaxWidth: false, // Change to false to allow full width
+                                htmlLabels: true,
+                                curve: 'basis',
+                                width: '100%', // Add explicit width
+                                height: 'auto'
+                            },
+                            sequence: {
+                                useMaxWidth: false, // Also handle sequence diagrams
+                                width: '100%'
+                            },
+                            gantt: {
+                                useMaxWidth: false, // Handle Gantt charts
+                                width: '100%'
+                            }
+                        });
+                        mermaid.run({ nodes: element.querySelectorAll('.mermaid') });
+                        console.log("Mermaid rendered in element:", element);
+                    } catch (e) {
+                        console.error("Mermaid rendering error:", e);
+                        element.querySelectorAll('.mermaid').forEach(div => {
+                            if (!div.hasAttribute('data-processed') && !div.querySelector('.alert-danger')) {
+                                div.innerHTML = `<div class="alert alert-danger alert-sm p-1 m-0">Mermaid Error: ${e.message}</div>`;
+                            }
+                        });
+                    }
+                }
+            });
+        }
+
+
+        function addMessage(text, type, timestamp = null, addTimestampPlaceholder = false) {
+            // Create the outer flex container for alignment
+            const flexContainer = document.createElement('div');
+            flexContainer.classList.add('d-flex', 'mb-3'); // Add Bootstrap margin bottom
+
+            // Determine alignment based on message type
+            if (type === 'user-message') {
+                flexContainer.classList.add('justify-content-end');
+            } else {
+                flexContainer.classList.add('justify-content-start');
+            }
+
+            // Create the message bubble itself
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', type, 'message-fade-in'); // Keep custom classes for styling
+
+            // Create a span for the main text content
+            const textSpan = document.createElement('span');
+            // Use innerHTML if you expect the bot to send formatted text (like markdown)
+            // Be cautious with innerHTML if the source isn't trusted.
+            // If text is plain, textContent is safer.
+            if (type === 'bot-message') {
+                 // Example: Basic markdown link handling (needs a proper library for full support)
+                 text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+                 textSpan.innerHTML = text; // Allow basic HTML from bot
+            } else {
+                 textSpan.textContent = text; // User messages as plain text
+            }
+            messageDiv.appendChild(textSpan);
+
+            // Create and append the timestamp span
+            const timeSpan = document.createElement('span');
+            timeSpan.classList.add('timestamp'); // Keep custom class
+            if (timestamp) {
+                timeSpan.textContent = new Date(timestamp).toLocaleString().replace(/:\d{2}\s/, ' ');
+            } else if (addTimestampPlaceholder) {
+                timeSpan.textContent = ' ';
+                timeSpan.dataset.role = "timestamp-placeholder";
+            }
+            messageDiv.appendChild(timeSpan);
+
+            // Append the message bubble to the flex container
+            flexContainer.appendChild(messageDiv);
+
+            // Render diagrams within the newly created message structure before inserting
+            renderMermaidDiagrams(flexContainer);
+
+            // Insert the flex container before the anchor
+            chatbox.insertBefore(flexContainer, messageAnchor);
             messageAnchor.scrollIntoView({ behavior: 'smooth' });
+
+            // Return the message bubble div (the inner one) for potential updates (like streaming)
+            return messageDiv;
+        }
+
+
+        function addBotMessageChunk(text, botMessageDiv) {
+            // Append text to the main text span, preserving existing newlines and basic HTML
+            const textNode = botMessageDiv.querySelector('span:not(.timestamp)');
+             if (textNode) {
+                 // Example: Basic markdown link handling during streaming
+                 text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+                 textNode.innerHTML += text; // Append HTML chunk
+             }
+            messageAnchor.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function updateTimestamp(messageDiv, timestamp) {
+             const timeSpan = messageDiv.querySelector('.timestamp');
+             if (timeSpan) {
+                 timeSpan.textContent = new Date(timestamp).toLocaleString().replace(/:\d{2}\s/, ' ');
+             }
         }
 
         async function sendMessage() {
             const message = messageInput.value.trim();
             if (!message) return;
 
-            addMessage(message, 'user-message', new Date()); // Add user message immediately
+            const userMessageDiv = addMessage(message, 'user-message', new Date()); // Add user message immediately
             messageInput.value = ''; // Clear input
             sendButton.disabled = true; // Disable button while processing
             thinkingIndicator.style.display = 'inline'; // Show thinking indicator
@@ -98,7 +585,12 @@
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
+                    // Send the message, active context, and selected model
+                    body: JSON.stringify({
+                        message: message,
+                        active_context: activeContextItems, // Send the current list
+                        model_name: modelSelect.value // Send selected model
+                    })
                 });
 
 
@@ -122,16 +614,12 @@
                 const decoder = new TextDecoder();
                 let buffer = '';
 
-                // Create the initial bot message div (empty)
-                currentBotMessageDiv = document.createElement('div');
-                currentBotMessageDiv.classList.add('message', 'bot-message');
-                // Add timestamp placeholder now
-                const timeSpan = document.createElement('span');
-                timeSpan.classList.add('timestamp');
-                timeSpan.textContent = new Date().toLocaleString().replace(/:\d{2}\s/, ' '); // Add time when response starts
-                currentBotMessageDiv.appendChild(timeSpan); // Append timestamp first
-                chatbox.insertBefore(currentBotMessageDiv, messageAnchor); // Add div to chatbox
+                // Create the initial bot message div (empty) with a timestamp placeholder
+                const responseStartTime = new Date(); // Capture start time
+                currentBotMessageDiv = addMessage('', 'bot-message', null, true); // Add empty message with placeholder
 
+                // --- Stream Reading Logic ---
+                let isFirstChunk = true; // Flag to update timestamp on first actual text chunk
 
                 while (true) {
                     const { value, done } = await reader.read();
@@ -151,20 +639,29 @@
                                 const jsonData = JSON.parse(line.substring(6)); // Remove 'data: ' prefix
 
                                 if (jsonData.text) {
+                                    if (isFirstChunk) {
+                                        // Update the timestamp on the first text chunk arrival
+                                        updateTimestamp(currentBotMessageDiv, responseStartTime);
+                                        isFirstChunk = false;
+                                    }
                                     addBotMessageChunk(jsonData.text, currentBotMessageDiv);
                                 } else if (jsonData.context_error) {
                                     // Display context errors separately
-                                    addMessage(`Context Warning: ${jsonData.context_error}`, 'context-warning');
+                                    addMessage(`Context Warning: ${jsonData.context_error}`, 'context-warning', new Date());
                                 } else if (jsonData.error) {
                                     // Display general errors separately
-                                    addMessage(`Stream Error: ${jsonData.error}`, 'error-message');
+                                    addMessage(`Stream Error: ${jsonData.error}`, 'error-message', new Date());
                                 } else if (jsonData.end_stream) {
                                     console.log('End of stream signal received.');
+                                    // If no text chunks were received, update timestamp now
+                                    if (isFirstChunk && currentBotMessageDiv) {
+                                         updateTimestamp(currentBotMessageDiv, responseStartTime);
+                                    }
                                     // Optional: Add final timestamp or indicator
                                 }
                             } catch (e) {
                                 console.error('Error parsing SSE data:', e, 'Raw line:', line);
-                                addMessage(`Error: Could not parse response chunk.`, 'error-message');
+                                addMessage(`Error: Could not parse response chunk.`, 'error-message', new Date());
                             }
                         }
                     }
@@ -174,13 +671,26 @@
 
             } catch (error) {
                 console.error('Fetch error:', error);
-                addMessage(`Network or connection error: ${error.message}`, 'error-message');
+                addMessage(`Network or connection error: ${error.message}`, 'error-message', new Date());
+                // Add failure message to the bot message div if it exists
                 if (currentBotMessageDiv) {
-                    currentBotMessageDiv.textContent += " (Connection failed)"; // Indicate failure in the message div
+                    const textNode = currentBotMessageDiv.querySelector('span:not(.timestamp)');
+                    if (textNode) {
+                         textNode.textContent += " (Connection failed)";
+                    }
+                    // Ensure timestamp is updated even on failure if it wasn't already
+                    const timeSpan = currentBotMessageDiv.querySelector('.timestamp[data-role="timestamp-placeholder"]');
+                    if (timeSpan) {
+                        updateTimestamp(currentBotMessageDiv, responseStartTime);
+                    }
                 }
             } finally {
                 sendButton.disabled = false; // Re-enable button
                 thinkingIndicator.style.display = 'none'; // Hide thinking indicator
+                // Render diagrams in the final streamed message if it exists
+                if (currentBotMessageDiv) {
+                    renderMermaidDiagrams(currentBotMessageDiv.parentNode); // Pass the parent flex container
+                }
                 messageAnchor.scrollIntoView({ behavior: 'smooth' }); // Ensure scrolled to bottom
             }
         }
@@ -193,11 +703,521 @@
             }
         });
 
-        // Initial scroll to bottom
-        window.onload = () => {
-            messageAnchor.scrollIntoView();
+
+        // --- New Context Menu Logic ---
+
+        function showContextMenu() {
+            // Reset menu state
+            filesSubmenu.style.display = 'none';
+            foldersSubmenu.style.display = 'none';
+            urlSubmenu.style.display = 'none';
+            filesSubmenu.innerHTML = 'Loading...'; // Placeholder
+            foldersSubmenu.innerHTML = 'Loading...'; // Placeholder
+            urlInput.value = '';
+            document.querySelectorAll('.context-menu-item .icon').forEach(icon => icon.classList.remove('expanded'));
+
+            // Position the menu directly above the input box
+            const inputRect = messageInput.getBoundingClientRect();
+            const containerRect = messageInput.parentElement.getBoundingClientRect(); // Get input-area rect
+            // Calculate bottom position relative to the viewport bottom
+            // window.innerHeight gives viewport height
+            // inputRect.top gives distance from viewport top to input top
+            // So, window.innerHeight - inputRect.top is the distance from viewport bottom to input top
+            const spaceAboveInput = inputRect.top; // Space available above the input
+            const menuHeightEstimate = 150; // Estimate menu height, adjust as needed
+
+            // Position bottom edge of menu 5px above the top edge of the input
+            contextMenu.style.bottom = `${window.innerHeight - inputRect.top + 5}px`;
+            contextMenu.style.left = `${inputRect.left}px`; // Align left edge with input left edge
+            // Remove explicit width setting to allow natural sizing based on content and min-width CSS
+            // contextMenu.style.width = `${inputRect.width}px`;
+
+            contextMenu.style.display = 'block';
+            contextMenuVisible = true;
         }
 
+        function hideContextMenu() {
+            contextMenu.style.display = 'none';
+            contextMenuVisible = false;
+            atSymbolPosition = -1; // Reset position tracking
+        }
+
+        function insertContext(contextValue) {
+            const currentValue = messageInput.value;
+            // Replace the '@' that triggered the menu with the context string
+            // Ensure we handle cases where user might have typed more after '@'
+            if (atSymbolPosition !== -1) {
+                 const beforeAt = currentValue.substring(0, atSymbolPosition);
+                 // Find space after @ if user typed more, otherwise just append
+                 const spaceAfterAt = currentValue.indexOf(' ', atSymbolPosition);
+                 const afterAt = spaceAfterAt !== -1 ? currentValue.substring(spaceAfterAt) : '';
+                 messageInput.value = beforeAt + `@ "${contextValue}"` + afterAt;
+            } else {
+                 // Fallback if position wasn't tracked correctly
+                 messageInput.value += ` @ "${contextValue}"`;
+            }
+            hideContextMenu();
+            messageInput.focus();
+
+            // Add the context item to our tracked list if it's not already there
+            if (!activeContextItems.includes(contextValue)) {
+                activeContextItems.push(contextValue);
+                console.log("Active Context:", activeContextItems); // For debugging
+                updateContextUI(); // Update the UI
+            }
+        }
+
+        // --- Context Management UI ---
+        function updateContextUI() {
+            activeContextList.innerHTML = ''; // Clear current list
+
+            if (activeContextItems.length === 0) {
+                activeContextArea.style.display = 'none'; // Hide area if empty
+                return;
+            }
+
+            activeContextArea.style.display = 'block'; // Show area
+
+            activeContextItems.forEach((item, index) => {
+                const listItem = document.createElement('div');
+                listItem.classList.add('list-group-item', 'list-group-item-action', 'd-flex', 'justify-content-between', 'align-items-center', 'py-1', 'px-2'); // Bootstrap classes for styling
+
+                const textSpan = document.createElement('span');
+                textSpan.textContent = item;
+                textSpan.title = item; // Show full path on hover
+                textSpan.style.overflow = 'hidden';
+                textSpan.style.textOverflow = 'ellipsis';
+                textSpan.style.whiteSpace = 'nowrap';
+                textSpan.style.flexGrow = '1';
+                textSpan.style.marginRight = '10px';
+
+                const removeButton = document.createElement('button');
+                removeButton.classList.add('btn', 'btn-sm', 'btn-outline-danger', 'py-0', 'px-1');
+                removeButton.title = 'Remove Context Item';
+                removeButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" class="bi bi-x" viewBox="0 0 16 16"><path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z"/></svg>`; // Small X icon
+                removeButton.dataset.index = index; // Store index to remove
+
+                removeButton.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent triggering other clicks
+                    const indexToRemove = parseInt(e.currentTarget.dataset.index, 10);
+                    activeContextItems.splice(indexToRemove, 1); // Remove item from array
+                    updateContextUI(); // Re-render the list
+                });
+
+                listItem.appendChild(textSpan);
+                listItem.appendChild(removeButton);
+                activeContextList.appendChild(listItem);
+            });
+        }
+
+        clearContextButton.addEventListener('click', () => {
+            activeContextItems = []; // Clear the array
+            updateContextUI(); // Update the UI
+        });
+        // --- End Context Management UI ---
+
+
+        async function loadSubmenu(type, submenuElement, endpoint) {
+            submenuElement.innerHTML = 'Loading...'; // Show loading indicator
+            submenuElement.style.display = 'block';
+            try {
+                const response = await fetch(endpoint);
+                if (!response.ok) throw new Error(`Failed to load ${type}`);
+                const items = await response.json();
+
+                submenuElement.innerHTML = ''; // Clear loading indicator
+                if (items.length === 0) {
+                    submenuElement.innerHTML = `<div class="dropdown-item text-muted small disabled">No ${type} found.</div>`; // Use Bootstrap classes
+                } else {
+                    items.forEach(item => {
+                        const a = document.createElement('a'); // Use anchor for dropdown items
+                        a.classList.add('context-submenu-item', 'dropdown-item'); // Add Bootstrap class
+                        a.href = '#'; // Required for dropdown-item styling/behavior
+                        a.textContent = item;
+                        a.title = item; // Show full path on hover
+                        a.addEventListener('click', (e) => {
+                            e.preventDefault(); // Prevent default anchor behavior
+                            e.stopPropagation();
+                            insertContext(item);
+                        });
+                        submenuElement.appendChild(a);
+                    });
+                }
+            } catch (error) {
+                console.error(`Error loading ${type}:`, error);
+                submenuElement.innerHTML = `<div class="dropdown-item text-danger small disabled">Error loading ${type}.</div>`; // Use Bootstrap classes
+            }
+        }
+
+        // Event listener for typing '@'
+        messageInput.addEventListener('input', (event) => {
+            const value = messageInput.value;
+            const cursorPosition = messageInput.selectionStart; // Get cursor position
+
+            // Check if the last typed character is '@' or if '@' exists and menu isn't visible
+            if (event.data === '@') {
+                 atSymbolPosition = cursorPosition - 1; // Store position of the typed '@'
+                 showContextMenu();
+            } else if (!value.includes('@') && contextMenuVisible) {
+                 // Hide menu if all '@' are deleted
+                 hideContextMenu();
+            } else if (contextMenuVisible && cursorPosition <= atSymbolPosition) {
+                 // Hide menu if cursor moves before the '@' that opened it
+                 hideContextMenu();
+            }
+            // Basic check: hide if user types space immediately after @
+            if (value.charAt(atSymbolPosition + 1) === ' ' && contextMenuVisible) {
+                 hideContextMenu();
+            }
+
+        });
+
+        // Event listener for menu items
+        contextMenu.addEventListener('click', (event) => {
+            const menuItem = event.target.closest('.context-menu-item');
+            if (!menuItem) return;
+
+            const type = menuItem.dataset.type;
+            const icon = menuItem.querySelector('.icon');
+            let targetSubmenu;
+            let endpoint;
+
+            // Close other submenus
+            document.querySelectorAll('.context-submenu').forEach(sm => {
+                if (sm.id !== `${type}-submenu`) {
+                    sm.style.display = 'none';
+                }
+            });
+             document.querySelectorAll('.context-menu-item .icon').forEach(ic => {
+                 if (ic !== icon) {
+                     ic.classList.remove('expanded');
+                 }
+             });
+
+
+            if (type === 'files') {
+                targetSubmenu = filesSubmenu;
+                endpoint = '/list_files'; // New endpoint needed
+            } else if (type === 'folders') {
+                targetSubmenu = foldersSubmenu;
+                endpoint = '/list_folders'; // New endpoint needed
+            } else if (type === 'url') {
+                targetSubmenu = urlSubmenu;
+            } else {
+                return; // Should not happen
+            }
+
+            // Toggle submenu visibility
+            const isVisible = targetSubmenu.style.display === 'block';
+            if (isVisible) {
+                targetSubmenu.style.display = 'none';
+                icon.classList.remove('expanded');
+            } else {
+                 icon.classList.add('expanded');
+                 if (type === 'files' || type === 'folders') {
+                    loadSubmenu(type, targetSubmenu, endpoint);
+                 } else {
+                     // Just show the URL input container
+                     targetSubmenu.style.display = 'block';
+                     urlInput.focus();
+                 }
+            }
+        });
+
+        // Handle URL confirmation
+        urlConfirmButton.addEventListener('click', (e) => {
+             e.stopPropagation();
+             const url = urlInput.value.trim();
+             if (url) {
+                 // Basic URL validation (optional, can be improved)
+                 if (url.startsWith('http://') || url.startsWith('https://')) {
+                     insertContext(url);
+                 } else {
+                     alert('Please enter a valid URL (starting with http:// or https://)');
+                 }
+             }
+        });
+         urlInput.addEventListener('keypress', (e) => {
+             if (e.key === 'Enter') {
+                 e.preventDefault();
+                 urlConfirmButton.click(); // Trigger button click on Enter
+             }
+         });
+
+
+        // Hide menu on Escape key
+        messageInput.addEventListener('keydown', (event) => {
+             if (event.key === 'Escape' && contextMenuVisible) {
+                 hideContextMenu();
+             } else if (event.key === 'Enter' && !event.shiftKey && !contextMenuVisible) {
+                 // Send message only if Enter is pressed, shift is not held, and menu is hidden
+                 sendMessage();
+             }
+             // Prevent sending message with Enter if menu is visible
+             if (event.key === 'Enter' && contextMenuVisible) {
+                 event.preventDefault();
+             }
+        });
+
+        // Hide menu when clicking outside
+        document.addEventListener('click', (event) => {
+            if (contextMenuVisible && !contextMenu.contains(event.target) && event.target !== messageInput) {
+                // Check if the click target is the message input itself
+                const value = messageInput.value;
+                const cursorPosition = messageInput.selectionStart;
+                // Don't hide if the click is back into the input right after the '@'
+                if (cursorPosition === atSymbolPosition + 1) {
+                    return;
+                }
+                hideContextMenu();
+            }
+        });
+
+        // --- End Context Menu Logic ---
+
+
+// Function to create a date header element
+function createDateHeader(date) {
+    const header = document.createElement('div');
+    header.classList.add('date-header');
+    header.textContent = date;
+    return header;
+}
+
+// Function to update chat history
+async function updateChatHistory(selectedDate) {
+    try {
+        const url = selectedDate ? `/fetch_history?date=${selectedDate}` : '/fetch_history';
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+
+        // Clear current chat content except the message anchor
+        while (chatbox.firstChild !== messageAnchor) {
+            chatbox.removeChild(chatbox.firstChild);
+        }
+
+        // Group messages by date
+        const messagesByDate = {};
+        data.history.forEach(msg => {
+            const date = msg.timestamp.split(' ')[0];
+            if (!messagesByDate[date]) {
+                messagesByDate[date] = [];
+            }
+            messagesByDate[date].push(msg);
+        });
+
+        // Add messages with date headers
+        Object.entries(messagesByDate).forEach(([date, messages]) => {
+            // Add date header
+            chatbox.insertBefore(createDateHeader(date), messageAnchor);
+
+            // Add messages for this date
+            messages.forEach(msg => {
+                // Add user message
+                addMessage(msg.user_message, 'user-message', new Date(msg.timestamp));
+                // Add bot response
+                addMessage(msg.bot_response, 'bot-message', new Date(msg.timestamp));
+            });
+        });
+
+        // Scroll to bottom
+        messageAnchor.scrollIntoView({ behavior: 'smooth' });
+    } catch (error) {
+        console.error('Error fetching chat history:', error);
+        addMessage(`Error loading chat history: ${error.message}`, 'error-message');
+    }
+}
+
+// Date selection change listener
+dateSelect.addEventListener('change', (event) => {
+    const selectedDate = event.target.value;
+    // Enable/disable delete button based on selection
+    if (selectedDate) {
+        deleteHistoryButton.disabled = false;
+        deleteHistoryButton.style.display = 'inline-block';
+    } else {
+        deleteHistoryButton.disabled = true;
+        deleteHistoryButton.style.display = 'none';
+    }
+    // Update chat history without page reload
+    updateChatHistory(selectedDate);
+});
+
+        // Delete History Button listener
+        deleteHistoryButton.addEventListener('click', async () => {
+            const selectedDate = dateSelect.value;
+            if (!selectedDate) {
+                alert("Please select a specific date to delete.");
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete all chat history for ${selectedDate}? This action cannot be undone.`)) {
+                deleteHistoryButton.disabled = true; // Disable button during request
+                conversionStatus.textContent = `Deleting history for ${selectedDate}...`; // Use conversion status for feedback
+
+                try {
+                    const response = await fetch(`/delete_history/${selectedDate}`, {
+                        method: 'DELETE',
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok && result.success) {
+                        alert(`Successfully deleted history for ${selectedDate}.`);
+                        // Update dates dropdown
+                        const dateToRemove = selectedDate;
+                        for (let i = 0; i < dateSelect.options.length; i++) {
+                            if (dateSelect.options[i].value === dateToRemove) {
+                                dateSelect.remove(i);
+                                break;
+                            }
+                        }
+                        // Reset selection to "All History" and update display
+                        dateSelect.value = '';
+                        deleteHistoryButton.disabled = true;
+                        deleteHistoryButton.style.display = 'none';
+                        updateChatHistory(''); // Show all history
+                    } else {
+                        throw new Error(result.error || `Failed to delete history (Status: ${response.status})`);
+                    }
+                } catch (error) {
+                    console.error('Delete error:', error);
+                    alert(`Error deleting history: ${error.message}`);
+                    conversionStatus.textContent = `Error deleting history: ${error.message}`; // Show error
+                    deleteHistoryButton.disabled = false; // Re-enable button on error
+                }
+            }
+        });
+
+
+        // Initial setup on page load
+        window.onload = () => {
+            messageAnchor.scrollIntoView(); // Scroll chat to bottom
+            // Set initial state of delete button based on current dropdown value
+            if (dateSelect.value) {
+                 deleteHistoryButton.disabled = false;
+                 deleteHistoryButton.style.display = 'inline-block';
+            } else {
+                 deleteHistoryButton.disabled = true;
+                 deleteHistoryButton.style.display = 'none';
+            }
+        }
+
+        // --- PDF Conversion Logic ---
+        async function convertImagesToPdf() {
+            const files = imageInput.files;
+            if (!files || files.length === 0) {
+                conversionStatus.textContent = 'Please select one or more JPEG/JPG files.';
+                return;
+            }
+
+            convertButton.disabled = true;
+            conversionStatus.textContent = `Converting ${files.length} image(s)...`;
+
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('images', file); // Use 'images' as the key
+            }
+            // Add OCR flag to form data
+            formData.append('ocr_enabled', ocrCheckbox.checked);
+
+            try {
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    body: formData // Send files as FormData
+                    // No 'Content-Type' header needed, browser sets it for FormData
+                });
+
+                if (!response.ok) {
+                    let errorMsg = `Error ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMsg = `Error: ${errorData.error || errorMsg}`;
+                    } catch (e) {
+                        // Ignore if response is not JSON
+                    }
+                    throw new Error(errorMsg);
+                }
+
+                // Handle the PDF download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                // Create a filename like "converted_images_YYYYMMDD_HHMMSS.pdf"
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '');
+                a.download = `converted_images_${timestamp}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                conversionStatus.textContent = `Successfully converted ${files.length} image(s). Download started.`;
+                imageInput.value = ''; // Clear file input
+
+            } catch (error) {
+                console.error('Conversion error:', error);
+                conversionStatus.textContent = `Conversion failed: ${error.message}`;
+            } finally {
+                convertButton.disabled = false;
+            }
+        }
+
+        // Event listener for convert button
+        convertButton.addEventListener('click', convertImagesToPdf);
+        // --- End PDF Conversion Logic ---
+
+        // --- Context Summarization Logic ---
+        summarizeContextButton.addEventListener('click', async () => {
+            if (activeContextItems.length === 0) {
+                addMessage("No context items are currently active.", 'error-message', new Date());
+                return;
+            }
+            console.log("Summarizing context:", activeContextItems);
+            // Disable button temporarily
+            summarizeContextButton.disabled = true;
+            thinkingIndicator.style.display = 'inline'; // Show thinking indicator
+
+            try {
+                const response = await fetch('/summarize_context', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    // Send context items and selected model
+                    body: JSON.stringify({
+                        context_items: activeContextItems,
+                        model_name: modelSelect.value // Send selected model
+                    })
+                });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error ${response.status}`);
+                }
+                const data = await response.json();
+                
+                // Add any warnings as separate messages first
+                if (data.warnings && data.warnings.length > 0) {
+                    data.warnings.forEach(warning => {
+                        addMessage(warning, 'context-warning', new Date());
+                    });
+                }
+
+                // Then add the summary
+                addMessage(`Context Summary:\n${data.summary}`, 'bot-message', new Date());
+            } catch (error) {
+                console.error('Context summarization error:', error);
+                addMessage(`Error summarizing context: ${error.message}`, 'error-message', new Date());
+            } finally {
+                summarizeContextButton.disabled = false; // Re-enable button
+                thinkingIndicator.style.display = 'none'; // Hide thinking indicator
+            }
+        });
+        // --- End Context Summarization Logic ---
+
     </script>
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
