@@ -34,13 +34,14 @@ This is a web-based chat application powered by Google's Gemini AI models, built
 *   Beautiful Soup 4 (`beautifulsoup4`) (for parsing URL HTML content)
 *   Pillow (for image validation)
 *   img2pdf (for basic image-to-PDF conversion)
-*   PyPDF2 (used with OCR)
+*   PyPDF2 (for merging OCR-processed PDFs)
+*   html (for HTML encoding chat history)
 *   **Optional (for OCR):** Tesseract OCR Engine. Must be installed separately and accessible in the system's PATH. See [Tesseract Installation Guide](https://tesseract-ocr.github.io/tessdoc/Installation.html).
 *   **Optional (for OCR):** pytesseract Python wrapper (`pip install pytesseract`)
 
 You can install the required Python dependencies using `pip`:
 ```bash
-pip install Flask google-generativeai python-dotenv requests beautifulsoup4 Pillow img2pdf PyPDF2 pytesseract
+pip install Flask google-generativeai python-dotenv requests beautifulsoup4 Pillow img2pdf PyPDF2 pytesseract html
 ```
 *(Note: Update `requirements.txt` if you use one)*
 

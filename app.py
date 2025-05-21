@@ -722,7 +722,7 @@ Focus on:
 
 Keep the summary clear and well-organized."""
 
-        response = model.generate_content(prompt)
+        response = genai.model.generate_content(prompt)
         summary = response.text
 
         if errors:

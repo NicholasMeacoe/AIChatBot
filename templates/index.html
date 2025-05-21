@@ -235,6 +235,7 @@
         <div class="d-flex align-items-center gap-2">
             <label for="date-select" class="form-label mb-0">History:</label> <!-- Bootstrap form label -->
             <select id="date-select" class="form-select form-select-sm w-auto"> <!-- Bootstrap form select -->
+                <option value="" {% if not selected_date %}selected{% endif %}>Select Date...</option> {# Placeholder - No longer disabled #}
                 <option value="">All History</option> {# Option to show all #}
                 {% for date in available_dates %}
                     <option value="{{ date }}" {% if date == selected_date %}selected{% endif %}>
@@ -984,9 +985,24 @@ function createDateHeader(date) {
     return header;
 }
 
+// Function to clear chat history display
+function clearChatHistoryDisplay() {
+    while (chatbox.firstChild && chatbox.firstChild !== messageAnchor) {
+        chatbox.removeChild(chatbox.firstChild);
+    }
+    messageAnchor.scrollIntoView({ behavior: 'smooth' });
+}
+
 // Function to update chat history
 async function updateChatHistory(selectedDate) {
+    // If selectedDate is explicitly null (meaning "Select Date..." was chosen), clear the display
+    if (selectedDate === null) {
+        clearChatHistoryDisplay();
+        return;
+    }
+
     try {
+        // Use empty string for "All History", specific date otherwise
         const url = selectedDate ? `/fetch_history?date=${selectedDate}` : '/fetch_history';
         const response = await fetch(url);
         if (!response.ok) {
@@ -1033,17 +1049,23 @@ async function updateChatHistory(selectedDate) {
 
 // Date selection change listener
 dateSelect.addEventListener('change', (event) => {
-    const selectedDate = event.target.value;
-    // Enable/disable delete button based on selection
-    if (selectedDate) {
-        deleteHistoryButton.disabled = false;
-        deleteHistoryButton.style.display = 'inline-block';
-    } else {
+    const selectedIndex = event.target.selectedIndex;
+    const selectedOption = event.target.options[selectedIndex];
+    const selectedDateValue = selectedOption.value; // This is the date string or "" for "All History"
+
+    if (selectedIndex === 0) { // "Select Date..." is selected
         deleteHistoryButton.disabled = true;
         deleteHistoryButton.style.display = 'none';
+        updateChatHistory(null); // Pass null to signal clearing the display
+    } else if (selectedIndex === 1) { // "All History" is selected
+        deleteHistoryButton.disabled = true;
+        deleteHistoryButton.style.display = 'none';
+        updateChatHistory(''); // Pass empty string for all history
+    } else { // A specific date is selected
+        deleteHistoryButton.disabled = false;
+        deleteHistoryButton.style.display = 'inline-block';
+        updateChatHistory(selectedDateValue); // Pass the specific date
     }
-    // Update chat history without page reload
-    updateChatHistory(selectedDate);
 });
 
         // Delete History Button listener
@@ -1095,12 +1117,16 @@ dateSelect.addEventListener('change', (event) => {
 
         // Initial setup on page load
         window.onload = () => {
+            // Explicitly clear chatbox content on load as a safeguard
+            while (chatbox.firstChild && chatbox.firstChild !== messageAnchor) {
+                 chatbox.removeChild(chatbox.firstChild);
+            }
             messageAnchor.scrollIntoView(); // Scroll chat to bottom
-            // Set initial state of delete button based on current dropdown value
-            if (dateSelect.value) {
+            // Set initial state of delete button based on current dropdown selection index
+            if (dateSelect.selectedIndex > 1) { // Only enable delete if a specific date is selected
                  deleteHistoryButton.disabled = false;
                  deleteHistoryButton.style.display = 'inline-block';
-            } else {
+            } else { // Disable for "Select Date..." and "All History"
                  deleteHistoryButton.disabled = true;
                  deleteHistoryButton.style.display = 'none';
             }
