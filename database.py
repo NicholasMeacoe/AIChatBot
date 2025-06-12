@@ -2,13 +2,14 @@ import sqlite3
 import json
 import html
 from datetime import datetime
-from config import DB_NAME # Import database name from config
+import config # Import config module directly
 
 def init_db():
     """Initializes the database and creates the history table if it doesn't exist."""
     conn = None
+    db_name_to_use = config.DB_NAME # Access dynamically
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = sqlite3.connect(db_name_to_use)
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS history (
@@ -20,24 +21,34 @@ def init_db():
             )
         ''')
         conn.commit()
+
+        # Verify table creation
+        cursor.execute("PRAGMA table_info(history)")
+        if not cursor.fetchall():
+            raise sqlite3.OperationalError(f"Failed to create or verify 'history' table in {db_name_to_use}.")
+
         # Access app config to check for TESTING mode
         from flask import current_app
         if not current_app or not current_app.config.get('TESTING'):
-            print(f"Database '{DB_NAME}' initialized successfully.")
+            print(f"Database '{db_name_to_use}' initialized successfully.")
     except sqlite3.Error as e:
-        print(f"Database error during initialization: {e}")
+        # Ensure the error message includes the database path for easier debugging
+        error_msg = f"Database error during initialization for '{db_name_to_use}': {e}"
+        print(error_msg)
+        raise sqlite3.OperationalError(error_msg) from e # Re-raise to make it obvious in tests
     finally:
         if conn:
             conn.close()
 
 def get_db():
     """Establishes a connection to the database."""
+    db_name_to_use = config.DB_NAME # Access dynamically
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = sqlite3.connect(db_name_to_use)
         conn.row_factory = sqlite3.Row # Return rows as dict-like objects
         return conn
     except sqlite3.Error as e:
-        print(f"Database connection error: {e}")
+        print(f"Database connection error: {e} (DB: {db_name_to_use})")
         return None # Return None if connection fails
 
 def save_chat_history(user_message, bot_response, context_info_list=None):

@@ -4,7 +4,7 @@ import os
 # Import configuration and utility functions/modules
 import config
 from database import init_db
-from gemini_utils import configure_gemini_api, get_available_models
+from gemini_utils import configure_client, get_available_models # Renamed here
 from config import ensure_allowed_context_dir
 
 # Import Blueprints
@@ -45,19 +45,19 @@ def create_app():
     # 3. Configure Gemini API
     # In testing, API calls should ideally be mocked.
     if not app.config.get('TESTING'):
-        if not configure_gemini_api():
+        if not configure_client(): # Renamed here
             print("Warning: Gemini API could not be configured. Chat features will be unavailable.")
         else:
             print("Pre-fetching available Gemini models...")
             get_available_models(force_refresh=True)
     else:
         # For testing, we can assume the API key is set or mock calls.
-        # If a specific test needs API key status, it can check configure_gemini_api()
+        # If a specific test needs API key status, it can check configure_client()
         # or we can set a mock status.
-        # We still call configure_gemini_api() to ensure GOOGLE_API_KEY is loaded into os.environ
+        # We still call configure_client() to ensure GOOGLE_API_KEY is loaded into os.environ
         # as some tests might rely on it being available for other utilities,
         # but we suppress its direct print output (gemini_utils will be modified).
-        configure_gemini_api()
+        configure_client() # Renamed here
         # We don't pre-fetch models during testing to avoid actual API calls.
         pass
 

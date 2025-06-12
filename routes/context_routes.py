@@ -2,7 +2,8 @@ import os
 from flask import Blueprint, jsonify, request, json
 
 # Import shared utilities and config
-from config import ALLOWED_CONTEXT_DIR, DEFAULT_MODEL_NAME
+import config # Import config module directly
+from config import DEFAULT_MODEL_NAME # Keep this direct import
 from context_processing import fetch_and_process_url, process_context_path
 from gemini_utils import get_available_models, generate_summary
 
@@ -13,12 +14,12 @@ context_bp = Blueprint('context', __name__)
 def list_files_endpoint():
     """API endpoint to recursively list all files within ALLOWED_CONTEXT_DIR."""
     all_files = []
-    if not ALLOWED_CONTEXT_DIR or not os.path.exists(ALLOWED_CONTEXT_DIR):
-        print(f"Warning: ALLOWED_CONTEXT_DIR ('{ALLOWED_CONTEXT_DIR}') not found for listing files.")
+    if not config.ALLOWED_CONTEXT_DIR or not os.path.exists(config.ALLOWED_CONTEXT_DIR): # Use config.ALLOWED_CONTEXT_DIR
+        print(f"Warning: ALLOWED_CONTEXT_DIR ('{config.ALLOWED_CONTEXT_DIR}') not found for listing files.") # Use config.ALLOWED_CONTEXT_DIR
         return jsonify([]) # Return empty list if dir doesn't exist
 
     try:
-        allowed_dir_real = os.path.realpath(ALLOWED_CONTEXT_DIR)
+        allowed_dir_real = os.path.realpath(config.ALLOWED_CONTEXT_DIR) # Use config.ALLOWED_CONTEXT_DIR
         for root, dirs, files in os.walk(allowed_dir_real):
             # Security check: Ensure we don't somehow walk outside the allowed dir
             current_root_real = os.path.realpath(root)
@@ -43,7 +44,7 @@ def list_files_endpoint():
                      # Optionally skip this file and continue
 
     except Exception as e:
-        print(f"Error listing files in '{ALLOWED_CONTEXT_DIR}': {e}")
+        print(f"Error listing files in '{config.ALLOWED_CONTEXT_DIR}': {e}") # Use config.ALLOWED_CONTEXT_DIR
         return jsonify({"error": f"Failed to list files: {e}"}), 500
 
     return jsonify(sorted(all_files))
@@ -52,12 +53,12 @@ def list_files_endpoint():
 def list_folders_endpoint():
     """API endpoint to recursively list all folders within ALLOWED_CONTEXT_DIR."""
     all_folders = []
-    if not ALLOWED_CONTEXT_DIR or not os.path.exists(ALLOWED_CONTEXT_DIR):
-        print(f"Warning: ALLOWED_CONTEXT_DIR ('{ALLOWED_CONTEXT_DIR}') not found for listing folders.")
+    if not config.ALLOWED_CONTEXT_DIR or not os.path.exists(config.ALLOWED_CONTEXT_DIR): # Use config.ALLOWED_CONTEXT_DIR
+        print(f"Warning: ALLOWED_CONTEXT_DIR ('{config.ALLOWED_CONTEXT_DIR}') not found for listing folders.") # Use config.ALLOWED_CONTEXT_DIR
         return jsonify([])
 
     try:
-        allowed_dir_real = os.path.realpath(ALLOWED_CONTEXT_DIR)
+        allowed_dir_real = os.path.realpath(config.ALLOWED_CONTEXT_DIR) # Use config.ALLOWED_CONTEXT_DIR
         for root, dirs, files in os.walk(allowed_dir_real):
             # Security check (similar to list_files)
             current_root_real = os.path.realpath(root)
@@ -80,7 +81,7 @@ def list_folders_endpoint():
                      print(f"Error processing directory item '{dirname}' in '{root}': {item_e}")
 
     except Exception as e:
-        print(f"Error listing folders in '{ALLOWED_CONTEXT_DIR}': {e}")
+        print(f"Error listing folders in '{config.ALLOWED_CONTEXT_DIR}': {e}") # Use config.ALLOWED_CONTEXT_DIR
         return jsonify({"error": f"Failed to list folders: {e}"}), 500
 
     # Add the root directory itself, represented by './'
@@ -96,7 +97,7 @@ def suggest_path_endpoint():
     suggestions = []
     max_suggestions = 20 # Limit the number of suggestions
 
-    if not ALLOWED_CONTEXT_DIR or not os.path.exists(ALLOWED_CONTEXT_DIR):
+    if not config.ALLOWED_CONTEXT_DIR or not os.path.exists(config.ALLOWED_CONTEXT_DIR): # Use config.ALLOWED_CONTEXT_DIR
         print("Warning: ALLOWED_CONTEXT_DIR not found or not accessible for suggestions.")
         return jsonify([]) # Return empty list if base dir is invalid
 
@@ -121,7 +122,7 @@ def suggest_path_endpoint():
             search_dir_relative = "" # Search in the root
 
         # Resolve the actual search directory path securely
-        allowed_dir_real = os.path.realpath(ALLOWED_CONTEXT_DIR)
+        allowed_dir_real = os.path.realpath(config.ALLOWED_CONTEXT_DIR) # Use config.ALLOWED_CONTEXT_DIR
         search_dir_absolute = os.path.realpath(os.path.join(allowed_dir_real, search_dir_relative))
 
         # Security Check: Ensure the search directory is still within the allowed directory
@@ -240,7 +241,7 @@ Keep the summary clear and well-organized."""
         # Use the non-streaming generation utility
         summary = generate_summary(prompt, selected_model_name)
 
-        response_data = {"summary": summary}
+        response_data = {"summary": summary, "processed_items": processed_paths_info_summary}
         if errors:
             # Include any non-fatal processing errors as warnings
             response_data["warnings"] = errors
@@ -250,5 +251,5 @@ Keep the summary clear and well-organized."""
     except Exception as e:
         # Catch errors from generate_summary (model instantiation or API call)
         print(f"Error generating context summary with model {selected_model_name}: {e}")
-        # Return a generic error message to the client
-        return jsonify({"error": f"Failed to generate summary using model {selected_model_name}."}), 500
+        # Return a specific error message to the client, including details
+        return jsonify({"error": f"Failed to generate summary using model {selected_model_name}.", "details": str(e)}), 500

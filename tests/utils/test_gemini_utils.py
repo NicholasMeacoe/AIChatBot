@@ -5,7 +5,7 @@ import json # For generate_response_stream tests
 
 # Functions to test
 from gemini_utils import (
-    configure_gemini_api,
+    configure_client, # Renamed from configure_gemini_api
     get_available_models,
     generate_response_stream,
     generate_summary,
@@ -17,40 +17,36 @@ from config import GOOGLE_API_KEY as CONFIG_API_KEY # Original key from app's co
 import gemini_utils # To mock client at module level or genai directly
 import requests # For requests.exceptions.RequestException
 
-# --- Tests for configure_gemini_api ---
+# --- Tests for configure_client ---
 
-def test_configure_gemini_api_success(monkeypatch):
-    """Test successful Gemini API configuration."""
+def test_configure_client_success(monkeypatch): # Renamed test
+    """Test successful Gemini client configuration."""
     monkeypatch.setattr(gemini_utils, 'GOOGLE_API_KEY', "test_api_key")
-    # We need to patch 'google.generativeai.Client' if gemini_utils imports 'google.generativeai as genai'
-    # and calls 'genai.Client'. Or, if it's 'from google import genai', then 'gemini_utils.genai.Client'.
-    # Based on gemini_utils.py, it's 'from google import genai', then 'client = genai.Client(...)'
     with patch('gemini_utils.genai.Client') as mock_genai_client_constructor:
         mock_genai_client_instance = MagicMock()
         mock_genai_client_constructor.return_value = mock_genai_client_instance
 
-        assert configure_gemini_api() == True
+        assert configure_client() == True # Renamed call
         mock_genai_client_constructor.assert_called_once_with(api_key="test_api_key")
-        assert gemini_utils.client == mock_genai_client_instance # Check if the module's client is set
+        assert gemini_utils.client == mock_genai_client_instance
 
-def test_configure_gemini_api_no_key(monkeypatch, capsys):
-    """Test API configuration when GOOGLE_API_KEY is not set."""
+def test_configure_client_no_key(monkeypatch, capsys): # Renamed test
+    """Test client configuration when GOOGLE_API_KEY is not set."""
     monkeypatch.setattr(gemini_utils, 'GOOGLE_API_KEY', None)
-    # Ensure client is reset if it was set by a previous test (though fixtures should handle isolation)
     monkeypatch.setattr(gemini_utils, 'client', None)
-    assert configure_gemini_api() == False
+    assert configure_client() == False # Renamed call
     captured = capsys.readouterr()
     assert "GOOGLE_API_KEY not found" in captured.out
     assert gemini_utils.client is None
 
-def test_configure_gemini_api_exception(monkeypatch, capsys):
-    """Test API configuration when genai.Client() raises an exception."""
+def test_configure_client_exception(monkeypatch, capsys): # Renamed test
+    """Test client configuration when genai.Client() raises an exception."""
     monkeypatch.setattr(gemini_utils, 'GOOGLE_API_KEY', "test_api_key")
     monkeypatch.setattr(gemini_utils, 'client', None)
     with patch('gemini_utils.genai.Client', side_effect=Exception("Config error")) as mock_genai_client_constructor:
-        assert configure_gemini_api() == False
+        assert configure_client() == False # Renamed call
         captured = capsys.readouterr()
-        assert "Error configuring Gemini API: Config error" in captured.out
+        assert "Error configuring Gemini client: Config error" in captured.out # Updated expected message
         assert gemini_utils.client is None
 
 
@@ -62,13 +58,21 @@ def clear_model_cache_and_restore_key(monkeypatch):
     FETCHED_MODELS_CACHE.clear()
     # Restore the API key in gemini_utils to its original value from config
     # This helps isolate tests that modify it.
-    monkeypatch.setattr(gemini_utils, 'GOOGLE_API_KEY', CONFIG_API_KEY)
+    # Set a consistent dummy API key for all tests in this module,
+    # rather than relying on CONFIG_API_KEY which might be None.
+    monkeypatch.setattr(gemini_utils, 'GOOGLE_API_KEY', "dummy_api_key_for_tests")
     # It's also good practice to reset the client if tests modify it directly,
     # though mock_gemini_client fixture should handle its state.
     # monkeypatch.setattr(gemini_utils, 'client', None) # Or setup via configure_gemini_api if needed by test
 
 def test_get_available_models_no_api_key(monkeypatch, capsys):
+    # This test specifically tests behavior when API key is None.
+    # The autouse fixture runs first, sets it to "dummy_api_key_for_tests".
+    # So, we need to override it here for this specific test case.
     monkeypatch.setattr(gemini_utils, 'GOOGLE_API_KEY', None)
+    # Ensure client is None because configure_client would fail
+    monkeypatch.setattr(gemini_utils, 'client', None)
+
     models = get_available_models()
     assert models == [GEMINI_UTILS_DEFAULT_MODEL_NAME]
     captured = capsys.readouterr()
@@ -94,7 +98,7 @@ def test_get_available_models_sdk_success(mock_gemini_client, monkeypatch):
 
     models = get_available_models()
     assert sorted(models) == expected_models # Compare sorted as order might vary if default is added
-    assert sorted(FETCHED_MODELS_CACHE) == expected_models
+    assert sorted(gemini_utils.FETCHED_MODELS_CACHE) == expected_models # Access via module
     mock_gemini_client.models.list.assert_called_once()
 
 def test_get_available_models_sdk_no_suitable_models(mock_gemini_client, monkeypatch, capsys):
@@ -180,7 +184,8 @@ def test_get_available_models_default_model_added(mock_gemini_client, monkeypatc
     monkeypatch.setattr(gemini_utils, 'client', mock_gemini_client)
 
     other_model_name = "gemini-other-model"
-    mock_model_other = MagicMock(name=f"models/{other_model_name}", supported_actions=['generateContent'])
+    mock_model_other = MagicMock(supported_actions=['generateContent'])
+    mock_model_other.name = f"models/{other_model_name}" # Explicitly set the 'name' attribute
     # Ensure DEFAULT_MODEL_NAME is not part of the mock SDK response initially
     assert other_model_name != GEMINI_UTILS_DEFAULT_MODEL_NAME
     mock_gemini_client.models.list.return_value = [mock_model_other]

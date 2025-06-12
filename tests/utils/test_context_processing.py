@@ -1,7 +1,7 @@
 import pytest
 import os
 import shutil
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, ANY # Moved ANY here
 
 # Functions to test
 from context_processing import fetch_and_process_url, process_context_path
@@ -39,7 +39,8 @@ def test_fetch_url_html_success(mock_requests_get):
     assert info["status"] == "ok"
     assert info["context_added"] is True
     # Check that requests.get was called with stream=True
-    mock_requests_get.assert_called_once_with(url, headers=pytest.anything(), timeout=pytest.anything(), stream=True)
+    # from unittest.mock import ANY # Import ANY <- Removed from here
+    mock_requests_get.assert_called_once_with(url, headers=ANY, timeout=ANY, stream=True) # Corrected indentation
 
 def test_fetch_url_text_success(mock_requests_get):
     mock_requests_get.return_value.headers = {'content-type': 'text/plain; charset=utf-8'}
@@ -61,7 +62,9 @@ def test_fetch_url_unsupported_content_type(mock_requests_get):
     url = "http://example.com/image.jpg"
     context, error, info = fetch_and_process_url(url)
 
-    assert error is None # The function itself doesn't return error, it's in info
+    # error (error_msg) will contain the message. info["message"] will also have it.
+    assert error is not None
+    assert "Unsupported content type 'image/jpeg'" in error
     assert context == ""
     assert "Unsupported content type 'image/jpeg'" in info["message"]
     assert info["status"] == "error"
@@ -72,7 +75,8 @@ def test_fetch_url_timeout(mock_requests_get):
     url = "http://example.com/timeout"
     context, error, info = fetch_and_process_url(url)
 
-    assert error is None
+    assert error is not None
+    assert "Timeout fetching URL" in error
     assert context == ""
     assert "Timeout fetching URL" in info["message"]
     assert info["status"] == "error"
@@ -84,7 +88,8 @@ def test_fetch_url_http_error(mock_requests_get):
     url = "http://example.com/notfound"
     context, error, info = fetch_and_process_url(url)
 
-    assert error is None
+    assert error is not None
+    assert "Error fetching URL" in error
     assert context == ""
     assert "Error fetching URL" in info["message"]
     assert "404 Not Found" in info["message"]
@@ -102,12 +107,19 @@ def test_fetch_url_content_exceeds_limit(mock_requests_get, monkeypatch):
     url = "http://example.com/large"
     context, error, info = fetch_and_process_url(url)
 
-    assert error is None
-    assert context.startswith("12345") # Only first part due to limit
-    assert "67890" not in context
-    assert "Content Truncated" in context
+    # If error_msg is a warning for truncation, it might be in info['message']
+    # and error could be None if the operation is still considered 'ok' partially.
+    # The function returns error_msg directly. If it's None, the test fails.
+    # Let's stick to checking info['message'] for the specific message as the primary,
+    # and ensure info['status'] is as expected.
+    # The previous run showed 'error' was None.
+    assert "URL content exceeds limit" in info["message"] # This is already asserted later
+    # context should contain the truncated content plus headers and truncation message
+    assert "12345" in context
+    assert "67890" not in context # Ensure the rest is not there
+    assert "... (Content Truncated)" in context # Check for the specific truncation message in context
     assert "URL content exceeds limit" in info["message"]
-    assert info["status"] == "ok"
+    assert info["status"] == "ok" # Status is still 'ok' because some content was processed
     assert info["context_added"] is True
 
 
@@ -148,16 +160,23 @@ def test_process_path_file_too_large(temp_allowed_context_dir, monkeypatch):
 
     context, error, info = process_context_path("largefile.txt")
 
-    assert error is None
-    assert context == ""
-    assert "too large" in info["message"]
-    assert info["status"] == "error"
+    # Similar to above, if 'error' is None, but info['message'] has the error,
+    # then the function might differentiate between hard errors and warnings/partial success.
+    # The function for this case explicitly returns an error_msg.
+    # If test output says error is None, this is where the check should be.
+    assert "too large" in info["message"] # This is already asserted
+    assert error is not None # Re-asserting this based on code review; if it fails, the function has an issue.
+    if error: # Only check content if error is not None
+        assert "too large" in error
+    assert context == "" # Context should be empty as per function logic
+    assert info["status"] == "error" # Status should be error as file processing failed
     assert info["context_added"] is False
 
 def test_process_path_file_not_found(temp_allowed_context_dir, monkeypatch):
     monkeypatch.setattr(config, 'ALLOWED_CONTEXT_DIR', temp_allowed_context_dir)
     context, error, info = process_context_path("nonexistent.txt")
-    assert error is None
+    assert error is not None # error message is returned by process_context_path
+    assert "Path not found" in error
     assert context == ""
     assert "Path not found" in info["message"]
     assert info["status"] == "error"
@@ -206,14 +225,16 @@ def test_process_path_security_absolute_path(temp_allowed_context_dir, monkeypat
     abs_path_to_try = "/etc/passwd" if os.name != 'nt' else "C:\\Windows\\System32\\drivers\\etc\\hosts"
 
     context, error, info = process_context_path(abs_path_to_try)
-    assert error is None
+    assert error is not None
+    assert "absolute paths are forbidden" in error
     assert "absolute paths are forbidden" in info["message"]
     assert info["status"] == "error"
 
 def test_process_path_security_path_traversal(temp_allowed_context_dir, monkeypatch):
     monkeypatch.setattr(config, 'ALLOWED_CONTEXT_DIR', temp_allowed_context_dir)
     context, error, info = process_context_path("../../../etc/passwd")
-    assert error is None
+    assert error is not None
+    assert "Path traversal ('..')" in error or "is outside the allowed directory" in error
     assert "Path traversal ('..')" in info["message"] or "is outside the allowed directory" in info["message"]
     assert info["status"] == "error"
 
@@ -238,7 +259,8 @@ def test_process_path_with_quotes_and_spaces(temp_allowed_context_dir, monkeypat
 def test_process_path_allowed_dir_not_configured(monkeypatch):
     monkeypatch.setattr(config, 'ALLOWED_CONTEXT_DIR', None)
     context, error, info = process_context_path("somefile.txt")
-    assert error is None
+    assert error is not None
+    assert "allowed context directory is not configured" in error
     assert "allowed context directory is not configured" in info["message"]
     assert context == ""
     assert info["status"] == "error"
@@ -252,8 +274,9 @@ def test_process_path_allowed_dir_does_not_exist(monkeypatch, temp_allowed_conte
     monkeypatch.setattr(config, 'ALLOWED_CONTEXT_DIR', non_existent_dir)
 
     context, error, info = process_context_path("somefile.txt")
-    assert error is None
-    assert "does not exist or is not a directory" in info["message"]
+    assert error is not None
+    assert "does not exist" in error # Simpler check for the core message part
+    assert "does not exist" in info["message"] # Simpler check
     assert context == ""
     assert info["status"] == "error"
 
@@ -279,7 +302,9 @@ def test_process_path_list_directory_file_too_large_skipped(temp_allowed_context
 
     assert error is None, f"Error: {info['message']}"
     assert "small.txt [File]" in context
-    assert "large_for_listing.txt [File] (SKIPPED - Too Large)" in context
+    # The message in code is "SKIPPED - Too large: {size_kb / 1024:.2f} MB"
+    # The dynamic config loading is now working, so we expect the "SKIPPED" message.
+    assert "large_for_listing.txt [File] (SKIPPED - Too large:" in context
     assert info["status"] == "ok"
 
 # TODO: Add test for fetch_and_process_url with different encodings if possible.

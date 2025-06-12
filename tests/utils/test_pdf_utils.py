@@ -108,8 +108,9 @@ def test_convert_image_pil_verify_error(MockPILImage):
 
 @patch('pdf_utils.Image')
 def test_convert_image_pil_format_error(MockPILImage):
-    # Simulate PIL identifying a non-JPEG format after opening
-    mock_file, mock_img_instance = create_mock_image_file("img.png", pil_format='PNG')
+    # Simulate PIL identifying a non-JPEG format after opening.
+    # File extension must be valid to bypass the initial extension check.
+    mock_file, mock_img_instance = create_mock_image_file(filename="img.jpg", pil_format='PNG')
     MockPILImage.open.return_value = mock_img_instance
     with pytest.raises(PDFConversionError, match="Invalid image format detected.*Only JPEG allowed"):
         convert_images_to_pdf([mock_file])
@@ -137,7 +138,8 @@ def test_convert_ocr_tesseract_not_found_error(MockPILImage, mock_pytesseract): 
     MockPILImage.open.side_effect = [mock_img_instance1, mock_img_instance1]
 
     # Configure the conftest fixture mock to raise the original Pytesseract error
-    mock_pytesseract.side_effect = PytesseractOriginalNotFoundError("Tesseract not found by mock")
+    # Set side_effect to the class, not an instance, to avoid constructor issues.
+    mock_pytesseract.side_effect = PytesseractOriginalNotFoundError
 
     with pytest.raises(PdfUtilsTesseractNotFoundError, match="OCR Error: Tesseract is not installed or not found"):
         convert_images_to_pdf([mock_file1], ocr_enabled=True)
