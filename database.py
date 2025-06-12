@@ -20,7 +20,10 @@ def init_db():
             )
         ''')
         conn.commit()
-        print(f"Database '{DB_NAME}' initialized successfully.")
+        # Access app config to check for TESTING mode
+        from flask import current_app
+        if not current_app or not current_app.config.get('TESTING'):
+            print(f"Database '{DB_NAME}' initialized successfully.")
     except sqlite3.Error as e:
         print(f"Database error during initialization: {e}")
     finally:
@@ -51,7 +54,9 @@ def save_chat_history(user_message, bot_response, context_info_list=None):
             (user_message, bot_response, context_info_json)
         )
         conn.commit()
-        print(f"Saved interaction to DB: User: '{user_message[:50]}...', Bot: '{bot_response[:50]}...'")
+        from flask import current_app # Ensure it's available in this scope
+        if not current_app or not current_app.config.get('TESTING'):
+            print(f"Saved interaction to DB: User: '{user_message[:50]}...', Bot: '{bot_response[:50]}...'")
         return True
     except sqlite3.Error as e:
         print(f"Database error saving chat history: {e}")
