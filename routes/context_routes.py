@@ -119,6 +119,8 @@ def suggest_path_endpoint():
             # User is typing at the root of allowed_context
             base_dir_part = ""
             search_prefix = normalized_partial
+            if search_prefix == ".": # If normpath("") made it ".", treat as empty for prefix matching
+                search_prefix = ""
             search_dir_relative = "" # Search in the root
 
         # Resolve the actual search directory path securely

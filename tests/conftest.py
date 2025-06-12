@@ -11,56 +11,65 @@ from database import init_db as initialize_database
 from config import ALLOWED_CONTEXT_DIR as ORIGINAL_ALLOWED_CONTEXT_DIR_CONFIG # Renamed to avoid clash
 from config import ALLOWED_CONTEXT_DIR_NAME as ORIGINAL_ALLOWED_CONTEXT_DIR_NAME_CONFIG # Renamed
 from config import DEFAULT_MODEL_NAME
+import config as config_module_for_patching # For pytest_configure
+import gemini_utils as gemini_utils_module_for_patching # For pytest_configure
+
+# Store original values to restore them later
+ORIGINAL_ENV_GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
+ORIGINAL_CONFIG_GOOGLE_API_KEY = config_module_for_patching.GOOGLE_API_KEY
+ORIGINAL_GEMINI_UTILS_GOOGLE_API_KEY = gemini_utils_module_for_patching.GOOGLE_API_KEY
+
+
+def pytest_configure(config): # Changed argument name config_pytest to config
+    """Sets up global configuration for tests, like setting a dummy API key."""
+    os.environ["GOOGLE_API_KEY"] = "test_api_key_from_pytest_configure"
+    # Force update the config module variable as it's set at import time from os.getenv
+    config_module_for_patching.GOOGLE_API_KEY = "test_api_key_from_pytest_configure"
+    # Also update gemini_utils module variable as it imports from config
+    gemini_utils_module_for_patching.GOOGLE_API_KEY = "test_api_key_from_pytest_configure"
+
+def pytest_unconfigure(config): # Changed argument name config_pytest to config
+    """Restores original configuration after tests."""
+    if ORIGINAL_ENV_GOOGLE_API_KEY is None:
+        if "GOOGLE_API_KEY" in os.environ:
+            del os.environ["GOOGLE_API_KEY"]
+    else:
+        os.environ["GOOGLE_API_KEY"] = ORIGINAL_ENV_GOOGLE_API_KEY
+
+    config_module_for_patching.GOOGLE_API_KEY = ORIGINAL_CONFIG_GOOGLE_API_KEY
+    gemini_utils_module_for_patching.GOOGLE_API_KEY = ORIGINAL_GEMINI_UTILS_GOOGLE_API_KEY
 
 
 @pytest.fixture(scope='function') # Changed scope from 'session' to 'function'
-def app():
+def app(monkeypatch): # Added monkeypatch for config.DB_NAME
     """Create and configure a new app instance for each test function with an isolated DB."""
     db_fd, db_path = tempfile.mkstemp(suffix='.db')
 
-    flask_app = create_flask_app()
+    # Ensure config.GOOGLE_API_KEY is the test key when app is created
+    # This is now handled by pytest_configure, but double-check or rely on it.
+    # For safety, we can re-apply monkeypatch to the specific config instance if needed,
+    # but pytest_configure should make it available process-wide before app_factory imports config.
+
+    flask_app = create_flask_app() # app_factory will import config and gemini_utils
     flask_app.config.update({
         "TESTING": True,
-        "DB_NAME": db_path,
+        "DB_NAME": db_path, # Flask app's config for DB_NAME
         "WTF_CSRF_ENABLED": False,
     })
 
-    import config # Import here to ensure monkeypatching affects the loaded module
-    import gemini_utils # Import for monkeypatching GOOGLE_API_KEY and cache
-
-    # Set a dummy API key for testing
-    original_api_key = os.environ.get("GOOGLE_API_KEY")
-    os.environ["GOOGLE_API_KEY"] = "test_api_key" # Set for the duration of the tests
-    # Also patch it in the gemini_utils module directly in case it was already loaded
-    monkeypatch_session = pytest.MonkeyPatch()
-    monkeypatch_session.setattr(gemini_utils, 'GOOGLE_API_KEY', "test_api_key", raising=False)
-
-
-    original_db_name_module_level = config.DB_NAME
-    config.DB_NAME = db_path
+    # Monkeypatch the DB_NAME in the config module directly for database.py functions
+    # as they access config.DB_NAME dynamically.
+    monkeypatch.setattr(config_module_for_patching, 'DB_NAME', db_path, raising=False)
 
     with flask_app.app_context():
         initialize_database()
-        # Configure a mock client for gemini_utils within app context if needed
-        # However, mock_gemini_client fixture does a general patch.
-        # Ensure gemini_utils.configure_client() is called or its effect is achieved.
-        # We can patch configure_client itself to do nothing or set up the mock.
-        with patch('gemini_utils.configure_client') as mock_configure_client:
-            mock_configure_client.return_value = None # Or the mocked client if it returns it
-            # Attempt to initialize models here if it happens at app start
-            # gemini_utils.get_available_models(force_refresh=True) # This might be too early or not needed if tests manage it
+        # The patch for 'gemini_utils.configure_client' during app context can be removed
+        # as app_factory.py no longer calls it in test mode, and mock_gemini_client fixture
+        # handles its own calls to configure_client.
 
     yield flask_app
 
-    # Teardown for API key
-    if original_api_key is None:
-        del os.environ["GOOGLE_API_KEY"]
-    else:
-        os.environ["GOOGLE_API_KEY"] = original_api_key
-    monkeypatch_session.undo()
-
-    # Teardown
-    config.DB_NAME = original_db_name_module_level
+    # DB_NAME restoration is handled by monkeypatch's teardown.
     os.close(db_fd)
     try:
         os.remove(db_path)

@@ -44,22 +44,22 @@ def create_app():
 
     # 3. Configure Gemini API
     # In testing, API calls should ideally be mocked.
+    # Do not configure real Gemini client during app creation for tests.
+    # Test fixtures (like mock_gemini_client) or specific test setups
+    # will be responsible for initializing/mocking gemini_utils.client.
     if not app.config.get('TESTING'):
         if not configure_client(): # Renamed here
             print("Warning: Gemini API could not be configured. Chat features will be unavailable.")
         else:
             print("Pre-fetching available Gemini models...")
             get_available_models(force_refresh=True)
-    else:
-        # For testing, we can assume the API key is set or mock calls.
-        # If a specific test needs API key status, it can check configure_client()
-        # or we can set a mock status.
-        # We still call configure_client() to ensure GOOGLE_API_KEY is loaded into os.environ
-        # as some tests might rely on it being available for other utilities,
-        # but we suppress its direct print output (gemini_utils will be modified).
-        configure_client() # Renamed here
-        # We don't pre-fetch models during testing to avoid actual API calls.
-        pass
+    # else:
+        # For testing, client is configured by test fixtures.
+        # The app() fixture in conftest.py ensures GOOGLE_API_KEY is patched in config
+        # and gemini_utils module for tests that might need to call configure_client() directly.
+        # No need to call configure_client() here during app setup for tests.
+        # We also don't pre-fetch models during testing to avoid actual API calls.
+        # pass
 
 
     # --- Register Blueprints ---

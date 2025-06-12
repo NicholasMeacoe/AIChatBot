@@ -54,8 +54,9 @@ def test_configure_client_exception(monkeypatch, capsys): # Renamed test
 
 @pytest.fixture(autouse=True)
 def clear_model_cache_and_restore_key(monkeypatch):
-    """Clears the model cache and restores API key before each test."""
-    FETCHED_MODELS_CACHE.clear()
+    """Clears the module-level cache in gemini_utils.py and sets a dummy API key before each test."""
+    # Explicitly set the module's global cache to a new empty list
+    monkeypatch.setattr(gemini_utils, 'FETCHED_MODELS_CACHE', [], raising=False)
     # Restore the API key in gemini_utils to its original value from config
     # This helps isolate tests that modify it.
     # Set a consistent dummy API key for all tests in this module,

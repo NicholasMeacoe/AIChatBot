@@ -5,7 +5,9 @@ from flask import (
 from datetime import datetime
 
 # Import shared utilities and config
-from config import DEFAULT_MODEL_NAME, FREE_TIER_LIMITS, GOOGLE_API_KEY
+import config # Import the config module directly
+from config import DEFAULT_MODEL_NAME, FREE_TIER_LIMITS # Keep direct imports for these
+# GOOGLE_API_KEY will be accessed via config.GOOGLE_API_KEY
 from database import (
     get_chat_history, get_distinct_chat_dates, save_chat_history,
     delete_history_by_date
@@ -43,7 +45,7 @@ def index():
 @main_bp.route('/chat', methods=['POST'])
 def chat_endpoint():
     """Handle incoming chat messages and stream responses."""
-    if not GOOGLE_API_KEY:
+    if not config.GOOGLE_API_KEY: # Access dynamically
          # Ensure API key check happens early
          return Response(json.dumps({"error": "Gemini API Key not configured."}), status=500, mimetype='application/json')
 
