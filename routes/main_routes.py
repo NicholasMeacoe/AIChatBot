@@ -5,7 +5,9 @@ from flask import (
 from datetime import datetime
 
 # Import shared utilities and config
-from config import DEFAULT_MODEL_NAME, FREE_TIER_LIMITS, GOOGLE_API_KEY
+import config # Import the config module directly
+from config import DEFAULT_MODEL_NAME, FREE_TIER_LIMITS # Keep direct imports for these
+# GOOGLE_API_KEY will be accessed via config.GOOGLE_API_KEY
 from database import (
     get_chat_history, get_distinct_chat_dates, save_chat_history,
     delete_history_by_date
@@ -43,7 +45,7 @@ def index():
 @main_bp.route('/chat', methods=['POST'])
 def chat_endpoint():
     """Handle incoming chat messages and stream responses."""
-    if not GOOGLE_API_KEY:
+    if not config.GOOGLE_API_KEY: # Access dynamically
          # Ensure API key check happens early
          return Response(json.dumps({"error": "Gemini API Key not configured."}), status=500, mimetype='application/json')
 
@@ -66,54 +68,71 @@ def chat_endpoint():
              return Response(json.dumps({"error": f"Invalid model selected: {selected_model_name}. Available: {available_models}"}), status=400, mimetype='application/json')
 
     # --- Process Active Context Items ---
-    full_context_str = ""
-    context_errors = []
+    context_errors_for_sse = [] # For yielding SSE events
     processed_context_info_for_db = [] # Store detailed info for DB logging
+    context_parts_for_prompt = [] # Collect parts for the final prompt (successful context + specific errors)
 
     if active_context_items:
         print(f"Processing active context: {active_context_items}")
         for item_path in active_context_items:
-            context_part = ""
-            error = None
-            path_info = None
+            context_part_content = "" # Content from successful processing
+            error_message_for_prompt = None # Specific error message for this item for the prompt
+            path_info = None # Holds original, status, message etc. from processing functions
+
             try:
                 if item_path.startswith(('http://', 'https://')):
-                    context_part, error, path_info = fetch_and_process_url(item_path)
+                    context_part_content, error, path_info = fetch_and_process_url(item_path)
                 else:
-                    context_part, error, path_info = process_context_path(item_path)
+                    context_part_content, error, path_info = process_context_path(item_path)
 
-                if path_info: # Store info even if there was an error or no context added
+                if path_info: # path_info should always be returned
                     processed_context_info_for_db.append(path_info)
-                if error:
-                    # Append user-friendly error message
-                    context_errors.append(path_info.get("message") or f"Error processing: {item_path}")
-                if context_part:
-                    full_context_str += context_part # Add successful context
+                else: # Should not happen if processing functions are consistent
+                    path_info = {"original": item_path, "status": "error", "message": "Processing function returned no info"}
+                    processed_context_info_for_db.append(path_info)
+
+
+                if error: # An error occurred for this item
+                    # For SSE event (general client display)
+                    error_message_for_sse = path_info.get("message") or f"Error processing: {item_path}"
+                    context_errors_for_sse.append(error_message_for_sse)
+                    # For prompt construction (more detailed, as per test expectations)
+                    # This format matches test_chat_endpoint_context_error_handling's expected_prompt
+                    error_message_for_prompt = f"Error processing context for {path_info.get('original', item_path)}: {path_info.get('message', 'Unknown error')}. "
+                    context_parts_for_prompt.append(error_message_for_prompt)
+
+                if context_part_content: # Successful context processing for this item
+                    context_parts_for_prompt.append(context_part_content)
 
             except Exception as e:
-                 # Catch unexpected errors during context processing
+                 # Catch unexpected errors during an item's context processing
                  error_msg = f"Unexpected error processing context item '{item_path}': {e}"
                  print(error_msg)
-                 context_errors.append(error_msg)
-                 # Add basic error info to DB log
-                 processed_context_info_for_db.append({
-                     "original": item_path, "status": "error", "message": error_msg
-                 })
+                 context_errors_for_sse.append(error_msg) # Add to SSE errors
+                 # Add a corresponding error message to the prompt parts
+                 context_parts_for_prompt.append(f"Error processing context for {item_path}: {error_msg}. ")
+                 # Ensure something is added to DB logs
+                 if not path_info: # If path_info wasn't set before exception
+                     processed_context_info_for_db.append({
+                         "original": item_path, "status": "error", "message": error_msg
+                     })
+
+    full_context_str = "".join(context_parts_for_prompt) # Construct final context string from all parts
 
     # --- Construct Final Prompt ---
     # Use a placeholder if user message is empty but context exists
     display_user_message = user_message if user_message else "(Referring to provided context)"
-    final_prompt = full_context_str + display_user_message # Prepend context
+    final_prompt = full_context_str + display_user_message # Prepend context string (which now includes errors)
 
     # Store original user message (even if empty) and context info for DB
     original_user_message_for_db = user_message if user_message else ""
 
     # --- Streaming Response ---
     def generate_and_save():
-        # Yield context errors first, if any
-        if context_errors:
-            error_data = json.dumps({"context_error": "\n".join(context_errors)})
-            yield f"data: {error_data}\n\n"
+        # Yield context errors as separate SSE events first, if any (for client display)
+        if context_errors_for_sse:
+            sse_error_data = json.dumps({"context_error": "\n".join(context_errors_for_sse)})
+            yield f"data: {sse_error_data}\n\n"
 
         # Use the utility function for streaming generation
         full_bot_response = ""

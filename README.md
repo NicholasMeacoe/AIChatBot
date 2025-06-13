@@ -123,3 +123,17 @@ python app.py
 ```
 
 The application will print status messages to the console. Access the application through your web browser at the displayed address (e.g., `http://0.0.0.0:5000/`).
+
+## Running Tests
+
+To run the automated tests, first install the development dependencies:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Then, run pytest from the root directory of the project:
+
+```bash
+pytest
+```

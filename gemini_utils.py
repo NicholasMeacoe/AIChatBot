@@ -9,18 +9,21 @@ from config import GOOGLE_API_KEY, DEFAULT_MODEL_NAME
 FETCHED_MODELS_CACHE = []
 client: genai.Client = None
 
-def configure_gemini_api():
+def configure_client():
     """Configures the Google Generative AI SDK with the API key."""
     global client
     if not GOOGLE_API_KEY:
         print("Error: GOOGLE_API_KEY not found. Gemini API cannot be configured.")
         return False
     try:
+        # The core of the configuration is creating the genai.Client instance.
+        # The mock_gemini_client fixture in conftest.py patches 'gemini_utils.genai.Client'
+        # so this call will use the mock during tests that use that fixture.
         client = genai.Client(api_key=GOOGLE_API_KEY)
-        print("Gemini API Key configured successfully.")
+        print("Gemini client configured successfully using API Key.") # Simplified message
         return True
     except Exception as e:
-        print(f"Error configuring Gemini API: {e}")
+        print(f"Error configuring Gemini client: {e}")
         return False
 
 def get_available_models(force_refresh=False):
@@ -141,7 +144,7 @@ def generate_summary(prompt, model_name=DEFAULT_MODEL_NAME):
 
 # Example usage (optional, for testing the module directly)
 if __name__ == '__main__':
-    if configure_gemini_api():
+    if configure_client(): # Renamed
         models = get_available_models(force_refresh=True)
         print("\nAvailable Models:")
         print(models)

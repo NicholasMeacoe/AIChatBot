@@ -1,0 +1,5 @@
+pytest
+pytest-flask
+pyfakefs
+python-dotenv
+google-generativeai

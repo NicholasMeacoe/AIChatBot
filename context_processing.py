@@ -2,13 +2,15 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import html
+import config # Import the config module directly
+# Remove direct imports of constants that need to be monkeypatched
 from config import (
-    ALLOWED_CONTEXT_DIR,
-    ALLOWED_CONTEXT_DIR_NAME,
-    MAX_FILE_READ_BYTES,
-    MAX_FILE_SIZE_MB,
-    MAX_URL_CONTENT_BYTES,
-    REQUEST_TIMEOUT
+    # ALLOWED_CONTEXT_DIR,
+    # ALLOWED_CONTEXT_DIR_NAME,
+    # MAX_FILE_READ_BYTES, # Will access via config.MAX_FILE_READ_BYTES
+    MAX_FILE_SIZE_MB, # This one seems okay for now, or change if needed
+    # MAX_URL_CONTENT_BYTES, # Will access via config.MAX_URL_CONTENT_BYTES
+    REQUEST_TIMEOUT # Likely okay, but for consistency could also be config.REQUEST_TIMEOUT
 )
 
 # --- URL Fetching and Processing ---
@@ -45,8 +47,8 @@ def fetch_and_process_url(url):
             for chunk in response.iter_content(chunk_size=8192):
                 content += chunk
                 bytes_read += len(chunk)
-                if bytes_read > MAX_URL_CONTENT_BYTES:
-                    error_msg = f"Error: URL content exceeds limit ({MAX_URL_CONTENT_BYTES / (1024*1024):.1f} MB). Truncated."
+                if bytes_read > config.MAX_URL_CONTENT_BYTES: # Use config.MAX_URL_CONTENT_BYTES
+                    error_msg = f"Error: URL content exceeds limit ({config.MAX_URL_CONTENT_BYTES / (1024*1024):.1f} MB). Truncated." # Use config.MAX_URL_CONTENT_BYTES
                     processed_url_info["message"] = error_msg
                     break # Stop reading
 
@@ -74,7 +76,7 @@ def fetch_and_process_url(url):
             # Add context header/footer
             context_str += f"--- START CONTEXT FROM URL: {url} ---\n"
             # Ensure final text doesn't exceed limit again after potential BS4 processing
-            context_str += text[:MAX_URL_CONTENT_BYTES]
+            context_str += text[:config.MAX_URL_CONTENT_BYTES] # Use config.MAX_URL_CONTENT_BYTES
             if error_msg: # Append truncation warning if it occurred
                  context_str += "\n... (Content Truncated)"
             context_str += f"\n--- END CONTEXT FROM URL: {url} ---\n\n"
@@ -90,7 +92,7 @@ def fetch_and_process_url(url):
             processed_url_info["message"] = error_msg
 
     except requests.exceptions.Timeout:
-        error_msg = f"Error: Timeout fetching URL: {url} (>{REQUEST_TIMEOUT}s)"
+        error_msg = f"Error: Timeout fetching URL: {url} (>{config.REQUEST_TIMEOUT}s)" # Use config.REQUEST_TIMEOUT
         processed_url_info["message"] = error_msg
     except requests.exceptions.RequestException as e:
         # Catch connection errors, invalid URLs, status code errors, etc.
@@ -129,7 +131,7 @@ def process_context_path(path):
         "context_added": False
     }
 
-    if not ALLOWED_CONTEXT_DIR:
+    if not config.ALLOWED_CONTEXT_DIR: # Use config.ALLOWED_CONTEXT_DIR
         error_msg = "Error: The allowed context directory is not configured or accessible."
         processed_path_info["message"] = error_msg
         return context_str, error_msg, processed_path_info
@@ -141,7 +143,7 @@ def process_context_path(path):
     # os.path.normpath helps normalize separators but doesn't prevent '..'
     normalized_path = os.path.normpath(clean_path)
     if os.path.isabs(normalized_path) or ".." in normalized_path.split(os.path.sep):
-         error_msg = f"Error: Only relative paths within '{ALLOWED_CONTEXT_DIR_NAME}' are allowed. Path traversal ('..') or absolute paths are forbidden: '{path}'"
+         error_msg = f"Error: Only relative paths within '{config.ALLOWED_CONTEXT_DIR_NAME}' are allowed. Path traversal ('..') or absolute paths are forbidden: '{path}'" # Use config.ALLOWED_CONTEXT_DIR_NAME
          processed_path_info["message"] = error_msg
          return context_str, error_msg, processed_path_info
 
@@ -150,13 +152,13 @@ def process_context_path(path):
     # os.path.abspath resolves the path, making it absolute
     # os.path.realpath resolves any symbolic links (important for security)
     try:
-        # Ensure ALLOWED_CONTEXT_DIR exists before joining
-        if not os.path.isdir(ALLOWED_CONTEXT_DIR):
-             error_msg = f"Error: Allowed context directory '{ALLOWED_CONTEXT_DIR}' does not exist."
+        # Ensure config.ALLOWED_CONTEXT_DIR exists before joining
+        if not os.path.isdir(config.ALLOWED_CONTEXT_DIR): # Use config.ALLOWED_CONTEXT_DIR
+             error_msg = f"Error: Allowed context directory '{config.ALLOWED_CONTEXT_DIR}' does not exist." # Use config.ALLOWED_CONTEXT_DIR
              processed_path_info["message"] = error_msg
              return context_str, error_msg, processed_path_info
 
-        target_path_intermediate = os.path.join(ALLOWED_CONTEXT_DIR, normalized_path)
+        target_path_intermediate = os.path.join(config.ALLOWED_CONTEXT_DIR, normalized_path) # Use config.ALLOWED_CONTEXT_DIR
         target_path = os.path.realpath(target_path_intermediate)
         processed_path_info["resolved"] = target_path # Store the actual path we are checking
     except Exception as e:
@@ -167,17 +169,17 @@ def process_context_path(path):
 
     # Security Check 2: Ensure the resolved path is *still* within the allowed directory
     # This comparison must be case-insensitive on Windows
-    allowed_dir_real = os.path.realpath(ALLOWED_CONTEXT_DIR)
+    allowed_dir_real = os.path.realpath(config.ALLOWED_CONTEXT_DIR) # Use config.ALLOWED_CONTEXT_DIR
     if os.name == 'nt': # Windows
         if not target_path.lower().startswith(allowed_dir_real.lower() + os.path.sep) and \
            target_path.lower() != allowed_dir_real.lower():
-            error_msg = f"Error: Access denied. Path '{path}' resolves outside the allowed directory '{ALLOWED_CONTEXT_DIR_NAME}'."
+            error_msg = f"Error: Access denied. Path '{path}' resolves outside the allowed directory '{config.ALLOWED_CONTEXT_DIR_NAME}'." # Use config.ALLOWED_CONTEXT_DIR_NAME
             processed_path_info["message"] = error_msg
             return context_str, error_msg, processed_path_info
     else: # Linux/macOS (case-sensitive paths)
         if not target_path.startswith(allowed_dir_real + os.path.sep) and \
            target_path != allowed_dir_real:
-            error_msg = f"Error: Access denied. Path '{path}' resolves outside the allowed directory '{ALLOWED_CONTEXT_DIR_NAME}'."
+            error_msg = f"Error: Access denied. Path '{path}' resolves outside the allowed directory '{config.ALLOWED_CONTEXT_DIR_NAME}'." # Use config.ALLOWED_CONTEXT_DIR_NAME
             processed_path_info["message"] = error_msg
             return context_str, error_msg, processed_path_info
 
@@ -185,7 +187,7 @@ def process_context_path(path):
     # Check if the resolved path actually exists
     if not os.path.exists(target_path):
         # Use the user-provided 'clean_path' in the error message for clarity
-        error_msg = f"Error: Path not found within '{ALLOWED_CONTEXT_DIR_NAME}': '{clean_path}' (resolved to '{target_path}')"
+        error_msg = f"Error: Path not found within '{config.ALLOWED_CONTEXT_DIR_NAME}': '{clean_path}' (resolved to '{target_path}')" # Use config.ALLOWED_CONTEXT_DIR_NAME
         processed_path_info["message"] = error_msg
         return context_str, error_msg, processed_path_info
 
@@ -197,10 +199,11 @@ def process_context_path(path):
 
         if os.path.isfile(target_path):
             file_size = os.path.getsize(target_path)
-            if file_size > MAX_FILE_READ_BYTES:
+            if file_size > config.MAX_FILE_READ_BYTES: # Use config.MAX_FILE_READ_BYTES
                  error_msg = (f"Error: File '{relative_display_path}' is too large "
                               f"({file_size / (1024*1024):.2f} MB > "
-                              f"{MAX_FILE_SIZE_MB} MB limit). Skipping.")
+                              # Message shows MAX_FILE_SIZE_MB, but logic uses MAX_FILE_READ_BYTES. Keep message for now or align.
+                              f"{config.MAX_FILE_SIZE_MB} MB limit). Skipping.")
                  processed_path_info["message"] = error_msg
                  # Return empty context but no error_msg that halts processing other items
                  return "", error_msg, processed_path_info
@@ -209,7 +212,7 @@ def process_context_path(path):
             try:
                 # Read with UTF-8, ignore errors for robustness against encoding issues
                 with open(target_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    context_str += f.read(MAX_FILE_READ_BYTES) # Read up to the limit
+                    context_str += f.read(config.MAX_FILE_READ_BYTES) # Use config.MAX_FILE_READ_BYTES
             except Exception as e:
                  error_msg = f"Error reading file '{relative_display_path}': {e}"
                  processed_path_info["message"] = error_msg
@@ -259,7 +262,7 @@ def process_context_path(path):
                             try:
                                 file_size = os.path.getsize(item_full_path)
                                 size_kb = file_size / 1024
-                                if file_size > MAX_FILE_READ_BYTES:
+                                if file_size > config.MAX_FILE_READ_BYTES: # Use config.MAX_FILE_READ_BYTES
                                     context_str += f"- {item_rel_path} [File] (SKIPPED - Too large: {size_kb / 1024:.2f} MB)\n"
                                 else:
                                     context_str += f"- {item_rel_path} [File] ({size_kb:.1f} KB)\n"
