@@ -1,5 +1,5 @@
-from google import genai
-from google.genai import models, types
+from google import genai # Corrected import
+from google.genai import types # types is still used for things like SafetySetting
 from typing import Optional
 import requests
 import json
@@ -7,166 +7,176 @@ from config import GOOGLE_API_KEY, DEFAULT_MODEL_NAME
 
 # Global variable to cache fetched models
 FETCHED_MODELS_CACHE = []
-client: genai.Client = None
+# client will be initialized by configure_client
+client: Optional[genai.client.Client] = None # Use full path for clarity if needed
 
 def configure_client():
     """Configures the Google Generative AI SDK with the API key."""
     global client
     if not GOOGLE_API_KEY:
         print("Error: GOOGLE_API_KEY not found. Gemini API cannot be configured.")
+        # In the new SDK, client isn't configured globally first,
+        # but we maintain this structure for now.
+        client = None
         return False
     try:
-        # The core of the configuration is creating the genai.Client instance.
-        # The mock_gemini_client fixture in conftest.py patches 'gemini_utils.genai.Client'
-        # so this call will use the mock during tests that use that fixture.
-        client = genai.Client(api_key=GOOGLE_API_KEY)
-        print("Gemini client configured successfully using API Key.") # Simplified message
+        # Initialize the client. API key is picked up from env var if not passed.
+        # For explicit key: client = genai.Client(api_key=GOOGLE_API_KEY)
+        client = genai.Client()
+        print("Gemini client configured successfully.")
         return True
     except Exception as e:
         print(f"Error configuring Gemini client: {e}")
+        client = None
         return False
 
 def get_available_models(force_refresh=False):
     """
     Fetches available models from the Google Generative Language API.
     Uses a cache unless force_refresh is True.
-    Returns a list of model names (e.g., 'gemini-1.5-flash-latest').
+    Returns a list of model names (e.g., 'models/gemini-1.5-flash-latest').
+    The new SDK returns model names with "models/" prefix.
     """
-    global FETCHED_MODELS_CACHE
+    global FETCHED_MODELS_CACHE, client
+    if not client:
+        print("Warning: Gemini client not configured. Cannot fetch models.")
+        return [DEFAULT_MODEL_NAME] # Return default if client is not setup
+
     if FETCHED_MODELS_CACHE and not force_refresh:
         print("Using cached model list.")
         return FETCHED_MODELS_CACHE
 
-    if not GOOGLE_API_KEY:
-        print("Warning: Cannot fetch models, API key is missing. Returning default.")
-        FETCHED_MODELS_CACHE = [DEFAULT_MODEL_NAME]
-        return FETCHED_MODELS_CACHE
-
     models_list = []
     try:
-        # Note: The Python SDK `genai.list_models()` might be simpler if it provides
-        # the necessary filtering capabilities. Let's try the SDK first.
-        print("Fetching available models via SDK...")
-        sdk_models = client.models.list()
-        for m in sdk_models:
+        print("Fetching available models via new SDK...")
+        sdk_models_raw = []
+        for m in client.models.list():
             # Filter for models supporting 'generateContent' (standard for chat/text)
-            if 'generateContent' in m.supported_actions:
-                 # Extract the model name after 'models/'
-                 model_name = m.name.split('/')[-1]
-                 # Optional: Further filter if needed (e.g., only 'gemini-' models)
-                 if model_name.startswith('gemini'):
-                    models_list.append(model_name)
+            # and ensure it's a Gemini model. The name format is now 'models/model-name'
+            if 'generateContent' in m.supported_actions and hasattr(m, 'name') and m.name.startswith('models/gemini'):
+                sdk_models_raw.append(m.name) # Store the full name string
 
-        if not models_list:
-            print("Warning: No suitable models found via SDK. Falling back to default.")
-            models_list = [DEFAULT_MODEL_NAME]
+        if not sdk_models_raw:
+            print("Warning: No suitable 'gemini' models found via SDK. Falling back to default.")
+            models_list = [DEFAULT_MODEL_NAME] # DEFAULT_MODEL_NAME should be prefixed
         else:
-            print(f"Fetched available models via SDK: {models_list}")
-            models_list = sorted(models_list) # Sort for consistency
+            # Sort the collected model name strings
+            models_list = sorted(list(set(sdk_models_raw))) # Ensure uniqueness and sort
+            print(f"Fetched and sorted available models via new SDK: {models_list}")
 
     except Exception as e_sdk:
-        print(f"Error fetching models via SDK: {e_sdk}. Trying direct API call...")
-        # Fallback to direct API call if SDK fails or doesn't work as expected
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models?key={GOOGLE_API_KEY}"
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            data = response.json()
+        print(f"Error fetching models via new SDK: {e_sdk}. Falling back to default.")
+        models_list = [DEFAULT_MODEL_NAME] # DEFAULT_MODEL_NAME should be prefixed
 
-            for model_info in data.get('models', []):
-                supported_methods = model_info.get('supportedGenerationMethods', [])
-                if 'generateContent' in supported_methods:
-                    model_name_full = model_info.get('name')
-                    if model_name_full and model_name_full.startswith('models/gemini'):
-                        model_name = model_name_full.split('/')[-1]
-                        if model_name not in models_list: # Avoid duplicates if SDK partially worked
-                             models_list.append(model_name)
-
-            if not models_list:
-                print("Warning: No suitable models found via direct API call either. Falling back to default.")
-                models_list = [DEFAULT_MODEL_NAME]
-            else:
-                 print(f"Fetched available models via direct API: {models_list}")
-                 models_list = sorted(models_list)
-
-        except requests.exceptions.RequestException as e_api:
-            print(f"Error fetching models from direct API: {e_api}. Falling back to default.")
-            models_list = [DEFAULT_MODEL_NAME]
-        except Exception as e_generic:
-            print(f"Unexpected error fetching models: {e_generic}. Falling back to default.")
-            models_list = [DEFAULT_MODEL_NAME]
-
-    # Ensure the default model is always in the list
+    # Ensure the default model is always in the list.
+    # DEFAULT_MODEL_NAME from config.py is now expected to be prefixed, e.g., "models/gemini-1.5-flash-latest"
     if DEFAULT_MODEL_NAME not in models_list:
-        models_list.insert(0, DEFAULT_MODEL_NAME) # Add default at the beginning if missing
+        models_list.append(DEFAULT_MODEL_NAME)
+        models_list = sorted(list(set(models_list))) # Re-sort and ensure uniqueness
 
     FETCHED_MODELS_CACHE = models_list
     return FETCHED_MODELS_CACHE
+
 
 def generate_response_stream(prompt, model_name=DEFAULT_MODEL_NAME):
     """
     Generates a response from the Gemini model using streaming.
     Yields JSON strings for SSE (Server-Sent Events).
+    Model name should be the full name, e.g., 'models/gemini-1.5-flash-latest'.
     """
-    try:
-        for chunk in client.models.generate_content_stream(
-            model=model_name,
-            contents=prompt
-        ):
-            if chunk.text:
-                # Send chunk to client via SSE
-                data = json.dumps({"text": chunk.text})
-                yield f"data: {data}\n\n" # SSE format
+    global client
+    if not client:
+        error_data = json.dumps({"error": "Gemini client not configured."})
+        yield f"data: {error_data}\n\n"
+        return
 
-        # Signal end of stream
+    # Ensure model_name has "models/" prefix if not already present
+    if not model_name.startswith("models/"):
+        model_name = f"models/{model_name}"
+
+    try:
+        # The new SDK uses client.models.generate_content for streaming as well
+        stream = client.models.generate_content(
+            model=model_name,
+            contents=prompt,
+            stream=True
+        )
+        for chunk in stream:
+            if chunk.text:
+                data = json.dumps({"text": chunk.text})
+                yield f"data: {data}\n\n"
+
         yield f"data: {json.dumps({'end_stream': True})}\n\n"
 
-    except ValueError as ve: # Catch configuration/model instantiation errors
-         error_data = json.dumps({"error": f"Model configuration error: {ve}"})
-         yield f"data: {error_data}\n\n"
-    except Exception as e:
-        print(f"Error during Gemini generation: {e}")
-        # Send error to client via SSE
-        error_data = json.dumps({"error": f"An error occurred during generation: {e}"})
+    except Exception as e: # Catch more general exceptions from the SDK
+        print(f"Error during Gemini generation (new SDK): {e}")
+        error_data = json.dumps({"error": f"An error occurred during generation: {str(e)}"})
         yield f"data: {error_data}\n\n"
 
 def generate_summary(prompt, model_name=DEFAULT_MODEL_NAME):
-    """Generates a non-streaming response, suitable for summarization."""
+    """
+    Generates a non-streaming response, suitable for summarization.
+    Model name should be the full name, e.g., 'models/gemini-1.5-flash-latest'.
+    """
+    global client
+    if not client:
+        raise ValueError("Gemini client not configured.")
+
+    if not model_name.startswith("models/"):
+        model_name = f"models/{model_name}"
+
     try:
-        response = client.models.generate_content(model_name, prompt) # Non-streaming call
+        # Non-streaming call in the new SDK
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt
+        )
         return response.text
-    except ValueError as ve:
-        print(f"Model configuration error during summary: {ve}")
-        raise # Re-raise to be handled by the route
-    except Exception as e:
-        print(f"Error during Gemini summary generation: {e}")
+    except Exception as e: # Catch more general exceptions
+        print(f"Error during Gemini summary generation (new SDK): {e}")
         raise # Re-raise to be handled by the route
 
 # Example usage (optional, for testing the module directly)
 if __name__ == '__main__':
-    if configure_client(): # Renamed
+    if configure_client():
         models = get_available_models(force_refresh=True)
-        print("\nAvailable Models:")
+        print("\nAvailable Models (new SDK):")
         print(models)
 
         if models:
-            print(f"\nAttempting to instantiate default model: {DEFAULT_MODEL_NAME}")
-            try:
-                model = client.models.get(model=DEFAULT_MODEL_NAME)
-                print(model)
-            except Exception as e:
-                 print(f"Failed: {e}")
+            # The default model name might need "models/" prefix
+            current_default_model_for_test = DEFAULT_MODEL_NAME
+            if not current_default_model_for_test.startswith("models/"):
+                 current_default_model_for_test = f"models/{current_default_model_for_test}"
 
-            # Test streaming (simple prompt)
-            # print("\nTesting streaming generation...")
-            # test_prompt = "Explain the concept of a large language model in one sentence."
-            # for chunk_data in generate_response_stream(test_prompt, DEFAULT_MODEL_NAME):
-            #     print(chunk_data, end='')
+            if current_default_model_for_test not in models:
+                print(f"\nWarning: Default model {current_default_model_for_test} not in fetched list. Using first available model for tests if any.")
+                current_default_model_for_test = models[0] if models else None
 
-            # Test summary (simple prompt)
-            # print("\nTesting summary generation...")
-            # try:
-            #     summary = generate_summary(test_prompt, DEFAULT_MODEL_NAME)
-            #     print(f"Summary: {summary}")
-            # except Exception as e:
-            #     print(f"Summary failed: {e}")
+            if current_default_model_for_test:
+                print(f"\nAttempting to use model for tests: {current_default_model_for_test}")
+                # client.models.get() is not the primary way to check in new SDK,
+                # but listing and then using one is fine.
+                # We can try a simple generation.
+
+                # Test streaming (simple prompt)
+                print("\nTesting streaming generation (new SDK)...")
+                test_prompt_stream = "Explain the concept of a large language model in one sentence."
+                try:
+                    for chunk_data in generate_response_stream(test_prompt_stream, current_default_model_for_test):
+                        print(chunk_data, end='')
+                except Exception as e_stream:
+                    print(f"Streaming test failed: {e_stream}")
+
+                # Test summary (simple prompt)
+                print("\nTesting summary generation (new SDK)...")
+                test_prompt_summary = "Summarize the importance of AI ethics."
+                try:
+                    summary = generate_summary(test_prompt_summary, current_default_model_for_test)
+                    print(f"Summary: {summary}")
+                except Exception as e_summary:
+                    print(f"Summary test failed: {e_summary}")
+            else:
+                print("\nNo models available to test.")
+    else:
+        print("Failed to configure client for __main__ test.")

@@ -2,4 +2,5 @@ pytest
 pytest-flask
 pyfakefs
 python-dotenv
-google-generativeai
+google-genai
+pytest-cov
