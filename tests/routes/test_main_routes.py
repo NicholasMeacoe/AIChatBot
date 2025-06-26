@@ -118,63 +118,50 @@ def test_chat_endpoint_with_file_context(mock_get_models, mock_fetch_url, mock_p
 @patch('routes.main_routes.get_available_models')
 def test_chat_endpoint_context_error_handling(mock_get_models, mock_fetch_url, mock_process_path, mock_save_history, client, mock_gemini_client, monkeypatch): # Removed mock_gen_stream
     # Ensure gemini_utils.client is the mock from the fixture
-    monkeypatch.setattr(gemini_utils, 'client', mock_gemini_client, raising=False) # This ensures the global client in gemini_utils is our mock
+    monkeypatch.setattr(gemini_utils, 'client', mock_gemini_client, raising=False)
 
-    mock_get_models.return_value = [DEFAULT_MODEL_NAME]
+    mock_get_models.return_value = [DEFAULT_MODEL_NAME] # DEFAULT_MODEL_NAME is prefixed
     good_context_info = {"original": "good.txt", "status": "ok", "path_type": "file", "message": "Processed good.txt"}
-    # Correct bad_context_info to reflect the actual input URL
     bad_context_info = {"original": "http://bad.url", "status": "error", "path_type": "url", "message": "URL fetch error"}
 
     mock_process_path.return_value = ("Good context. ", None, good_context_info)
-    mock_fetch_url.return_value = ("", "URL fetch error", bad_context_info) # error string in 2nd pos
+    mock_fetch_url.return_value = ("", "URL fetch error", bad_context_info)
 
-    # Configure the mock_gemini_client (which is gemini_utils.client.models)
-    # to make its generate_content_stream method return the desired stream.
-    # The actual gemini_utils.generate_response_stream will be called.
-    mock_stream_chunk = MagicMock()
-    mock_stream_chunk.text = "Response based on good context."
-    # The client.models object is already mocked by mock_gemini_client fixture.
-    # We access it via mock_gemini_client.models
-    mock_gemini_client.models.generate_content_stream.return_value = iter([
-        mock_stream_chunk
-    ])
-    # gemini_utils.generate_response_stream will add the end_stream event
+    # The mock_gemini_client from conftest.py will be used by gemini_utils.generate_response_stream.
+    # It's configured to return "Test response chunk 1." and "Test response chunk 2."
 
     payload = {
         "message": "Check this",
-        "active_context": ["good.txt", "http://bad.url"], # Corrected "bad.url" to be a full URL
+        "active_context": ["good.txt", "http://bad.url"],
         "model_name": DEFAULT_MODEL_NAME
     }
     response = client.post('/chat', json=payload)
     streamed_content = response.get_data(as_text=True)
 
-    expected_context_error_payload = {"context_error": "URL fetch error"} # Route joins errors into a string
+    expected_context_error_payload = {"context_error": "URL fetch error"}
     assert f"data: {json.dumps(expected_context_error_payload)}\n\n" in streamed_content
-    assert f"data: {json.dumps({'text': 'Response based on good context.'})}\n\n" in streamed_content
 
-    # Prompt includes error message from failed context item
-    expected_prompt = "Good context. Error processing context for bad.url: URL fetch error. Check this"
-    # We can't directly assert on mock_gen_stream anymore.
-    # Instead, we assert that gemini_utils.client.models.generate_content_stream was called with the right prompt.
-    # The call is made by the actual gemini_utils.generate_response_stream.
-    # The actual call in gemini_utils is: client.models.generate_content_stream(model=model_name, contents=prompt)
+    # Assert the actual streamed text from the conftest mock is present
+    assert f"data: {json.dumps({'text': 'Test response chunk 1.'})}\n\n" in streamed_content
+    assert f"data: {json.dumps({'text': 'Test response chunk 2.'})}\n\n" in streamed_content
+    assert f"data: {json.dumps({'end_stream': True})}\n\n" in streamed_content
 
-    # The assertion for save_chat_history remains the same.
-    # Note: path_info for bad_context_info will now have "http://bad.url" as original.
-    # The mock bad_context_info might need original:"http://bad.url" if it's checked strictly.
-    # Current bad_context_info: {"original": "bad.url", ...}
-    # Let's adjust bad_context_info for this test.
-    # updated_bad_context_info = {"original": "http://bad.url", "status": "error", "path_type": "url", "message": "URL fetch error"} # No longer needed
-    expected_db_context_info = [good_context_info, bad_context_info] # Use the corrected bad_context_info
-    mock_save_history.assert_called_once_with("Check this", "Response based on good context.", expected_db_context_info)
+    # The prompt passed to the model will include the error message.
+    # The path_info.get('original', item_path) for the URL will be "http://bad.url".
+    expected_model_prompt = "Good context. Error processing context for http://bad.url: URL fetch error. Check this"
 
-    # After other assertions, check the call to the underlying mock
-    # The expected_prompt uses path_info.get('original', item_path), which will now be "http://bad.url"
-    expected_prompt = "Good context. Error processing context for http://bad.url: URL fetch error. Check this"
-    mock_gemini_client.models.generate_content_stream.assert_called_once_with(
+    # Check that gemini_utils.client.models.generate_content was called correctly
+    # (via gemini_utils.generate_response_stream)
+    mock_gemini_client.models.generate_content.assert_called_once_with(
         model=DEFAULT_MODEL_NAME,
-        contents=expected_prompt
+        contents=expected_model_prompt,
+        stream=True
     )
+
+    # The bot_response saved to history should be the concatenation of chunks from the mock
+    expected_bot_response_for_db = "Test response chunk 1.Test response chunk 2."
+    expected_db_context_info = [good_context_info, bad_context_info]
+    mock_save_history.assert_called_once_with("Check this", expected_bot_response_for_db, expected_db_context_info)
 
 def test_chat_endpoint_no_message_no_context(client, mock_gemini_client, monkeypatch): # Added mock_gemini_client, monkeypatch
     # Ensure gemini_utils.client is the mock from the fixture, even if not strictly used for generation here,
