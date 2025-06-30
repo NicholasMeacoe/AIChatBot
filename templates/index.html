@@ -4,12 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gemini Chat</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; }
-        #chatbox { height: 400px; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background-color: #fff; }
+        body { font-family: sans-serif; margin: 0; background-color: #f4f4f4; display: flex; height: 100vh; }
+        #sidebar { width: 250px; background-color: #e0e0e0; padding: 20px; border-right: 1px solid #ccc; display: flex; flex-direction: column; }
+        #sidebar h2 { margin-top: 0; }
+        #new-chat-button { margin-bottom: 10px; padding: 10px; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; background-color: #f0f0f0; }
+        #conversation-list { list-style: none; padding: 0; margin: 0; }
+        #conversation-list li { padding: 10px; cursor: pointer; border-radius: 3px; }
+        #conversation-list li:hover { background-color: #d0d0d0; }
+        #conversation-list li.active { background-color: #007bff; color: white; }
+        #system-prompt-area { display: flex; margin-bottom: 10px; }
+        #system-prompt-input { flex-grow: 1; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 3px; }
+        #save-system-prompt { margin-left: 10px; padding: 10px 15px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        #model-select { margin-left: 10px; padding: 10px; border-radius: 3px; border: 1px solid #ccc; }
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; padding: 20px; height: 100%; box-sizing: border-box; }
+        #chatbox { flex-grow: 1; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background-color: #fff; }
         .message { margin-bottom: 10px; padding: 8px; border-radius: 5px; }
         .user-message { background-color: #e1f5fe; text-align: right; margin-left: 40px; }
-        .bot-message { background-color: #f0f0f0; margin-right: 40px; white-space: pre-wrap; /* Preserve whitespace/newlines */ }
+        .bot-message { background-color: #f0f0f0; margin-right: 40px; }
+        .bot-message pre { background-color: #eee; padding: 10px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; }
         .error-message { background-color: #ffebee; color: #c62828; border: 1px solid #c62828; padding: 8px; margin-right: 40px;}
         .context-warning { background-color: #fff9c4; color: #795548; border: 1px solid #fbc02d; font-size: 0.9em; margin-top: -5px; margin-bottom: 5px; padding: 5px; margin-right: 40px;}
         #input-area { display: flex; }
@@ -18,63 +34,253 @@
         #send-button:disabled { background-color: #ccc; cursor: not-allowed; }
         .timestamp { font-size: 0.7em; color: #888; display: block; margin-top: 3px; }
         #thinking { margin-left: 5px; display: none; font-style: italic; color: #555 } /* Initially hidden */
+
+        /* Theme Switcher */
+        #theme-switcher { position: absolute; top: 10px; right: 20px; }
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; }
+        input:checked + .slider { background-color: #2196F3; }
+        input:focus + .slider { box-shadow: 0 0 1px #2196F3; }
+        input:checked + .slider:before { transform: translateX(26px); }
+        .slider.round { border-radius: 34px; }
+        .slider.round:before { border-radius: 50%; }
+
+        /* Dark Mode */
+        body.dark-mode { background-color: #121212; color: #e0e0e0; }
+        body.dark-mode #chatbox { background-color: #1e1e1e; border-color: #444; }
+        body.dark-mode .user-message { background-color: #0d47a1; color: #e3f2fd; }
+        body.dark-mode .bot-message { background-color: #333; }
+        body.dark-mode .bot-message pre { background-color: #2c2c2c; color: #f0f0f0; }
+        .bot-message pre { position: relative; }
+        .copy-button { position: absolute; top: 5px; right: 5px; background-color: #888; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 0.8em; opacity: 0.5; }
+        .copy-button:hover { opacity: 1; }
+        .delete-button { background: none; border: none; color: #aaa; cursor: pointer; font-size: 1.2em; float: left; margin-right: 5px; opacity: 0.5; }
+        .delete-button:hover { color: #f00; opacity: 1; }
+        body.dark-mode #message-input { background-color: #333; border-color: #555; color: #e0e0e0; }
+        body.dark-mode #send-button { background-color: #0d47a1; }
+        body.dark-mode .context-warning { background-color: #4e4d2e; color: #fff9c4; border-color: #a48c1a; }
+        body.dark-mode .error-message { background-color: #5c1c1c; color: #ffebee; border-color: #a94442; }
+        body.dark-mode #thinking { color: #aaa; }
     </style>
 </head>
 <body>
-    <h1>Gemini Chat Interface</h1>
-    <div id="chatbox">
-        {% for msg in history %}
-            <div class="message user-message">
-                {{ msg.user_message }}
-                <span class="timestamp">{{ msg.timestamp.split('.')[0] }}</span> {# Basic timestamp formatting #}
-            </div>
-            <div class="message bot-message">
-                {{ msg.bot_response }}
-                 <span class="timestamp">{{ msg.timestamp.split('.')[0] }}</span> {# Use same timestamp for simplicity #}
-           </div>
-        {% endfor %}
-        {# Placeholder for new messages #}
-        <div id="message-anchor"></div>
+    <div id="sidebar">
+        <h2>Conversations</h2>
+        <button id="new-chat-button">+ New Chat</button>
+        <ul id="conversation-list">
+            {# Conversations will be loaded here via JS #}
+        </ul>
     </div>
-    <div id="input-area">
-        <input type="text" id="message-input" placeholder="Type your message (use @ {path} for context)..." autocomplete="off">
-        <button id="send-button">Send</button>
-        <span id="thinking">Thinking...</span>
+    <div id="main-content">
+        <div id="theme-switcher">
+            <label class="switch">
+                <input type="checkbox" id="theme-toggle">
+                <span class="slider round"></span>
+            </label>
+        </div>
+        <h1>Gemini Chat Interface</h1>
+        <div id="system-prompt-area">
+            <textarea id="system-prompt-input" placeholder="Enter a system prompt for this conversation..."></textarea>
+            <button id="save-system-prompt">Save</button>
+            <select id="model-select">
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                <option value="gemini-pro">Gemini Pro</option>
+            </select>
+        </div>
+        <input type="text" id="search-input" placeholder="Search history..." style="width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 3px; border: 1px solid #ccc;">
+        <div id="chatbox">
+            {# Messages for the selected conversation will go here #}
+            <div id="message-anchor"></div>
+        </div>
+        <div id="input-area">
+            <input type="text" id="message-input" placeholder="Type your message (use @ {path} for context)..." autocomplete="off">
+            <button id="send-button">Send</button>
+            <button id="stop-button" style="display: none;">Stop</button>
+            <span id="thinking">Thinking...</span>
+        </div>
     </div>
 
     <script>
         const chatbox = document.getElementById('chatbox');
         const messageInput = document.getElementById('message-input');
         const sendButton = document.getElementById('send-button');
+        const stopButton = document.getElementById('stop-button');
         const thinkingIndicator = document.getElementById('thinking');
         const messageAnchor = document.getElementById('message-anchor'); // Target for new messages
+        const conversationList = document.getElementById('conversation-list');
+        const newChatButton = document.getElementById('new-chat-button');
+        const systemPromptInput = document.getElementById('system-prompt-input');
+        const saveSystemPromptButton = document.getElementById('save-system-prompt');
+        const modelSelect = document.getElementById('model-select');
+        let abortController = null; // To control the fetch request
+        let currentConversationId = null;
 
-        function addMessage(text, type, timestamp = null) {
+        async function loadConversations() {
+            const response = await fetch('/api/conversations');
+            const conversations = await response.json();
+            conversationList.innerHTML = '';
+            conversations.forEach(convo => {
+                const li = document.createElement('li');
+                li.textContent = convo.name;
+                li.dataset.id = convo.id;
+                if (convo.id === currentConversationId) {
+                    li.classList.add('active');
+                }
+                li.addEventListener('click', () => {
+                    loadConversation(convo.id);
+                });
+                conversationList.appendChild(li);
+            });
+            if (!currentConversationId && conversations.length > 0) {
+                loadConversation(conversations[0].id);
+            } else if (conversations.length === 0) {
+                createNewChat();
+            }
+        }
+
+        async function loadConversation(id) {
+            if (currentConversationId === id) return;
+            currentConversationId = id;
+            document.querySelectorAll('#conversation-list li').forEach(li => {
+                li.classList.toggle('active', li.dataset.id == id);
+            });
+
+            chatbox.innerHTML = '<div id="message-anchor"></div>'; // Clear chatbox
+            const historyResponse = await fetch(`/api/history/${id}`);
+            const history = await historyResponse.json();
+            history.forEach(msg => {
+                const userMsgDiv = addMessage(msg.user_message, 'user-message', msg.timestamp, msg.id);
+                const botMsgDiv = addMessage('', 'bot-message', msg.timestamp, msg.id);
+                const contentDiv = botMsgDiv.querySelector('.message-content');
+                contentDiv.innerHTML = msg.bot_response;
+                addCopyButtons(contentDiv);
+            });
+            
+            // Load system prompt
+            const convoDetailsResponse = await fetch(`/api/conversations`);
+            const conversations = await convoDetailsResponse.json();
+            const currentConvo = conversations.find(c => c.id === id);
+            systemPromptInput.value = currentConvo.system_prompt || '';
+            modelSelect.value = currentConvo.model || 'gemini-1.5-flash';
+
+            messageAnchor.scrollIntoView();
+        }
+
+        async function saveModel() {
+            if (!currentConversationId) return;
+            const model = modelSelect.value;
+            await fetch(`/api/conversations/${currentConversationId}/model`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model })
+            });
+        }
+
+        async function saveSystemPrompt() {
+            if (!currentConversationId) return;
+            const system_prompt = systemPromptInput.value;
+            await fetch(`/api/conversations/${currentConversationId}/system_prompt`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ system_prompt })
+            });
+            alert('System prompt saved!');
+        }
+
+        async function createNewChat() {
+            const response = await fetch('/api/conversations', { method: 'POST' });
+            const newConvo = await response.json();
+            await loadConversations();
+            loadConversation(newConvo.id);
+        }
+
+
+        // Configure marked
+        marked.setOptions({
+            highlight: function(code, lang) {
+                const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+                return hljs.highlight(code, { language }).value;
+            },
+            langPrefix: 'hljs language-', // for CSS classes
+        });
+
+        function addMessage(text, type, timestamp = null, messageId = null) {
             const messageDiv = document.createElement('div');
             messageDiv.classList.add('message', type);
-            // Use textContent to prevent basic HTML injection issues
-            messageDiv.textContent = text;
+            if (messageId) {
+                messageDiv.dataset.messageId = messageId;
+            }
+
+            if (type === 'user-message' && messageId) {
+                const deleteButton = document.createElement('button');
+                deleteButton.className = 'delete-button';
+                deleteButton.innerHTML = '&times;';
+                deleteButton.addEventListener('click', async () => {
+                    if (confirm('Are you sure you want to delete this message pair?')) {
+                        await fetch(`/api/history/${messageId}`, { method: 'DELETE' });
+                        const messagesToDelete = document.querySelectorAll(`[data-message-id='${messageId}']`);
+                        messagesToDelete.forEach(msg => msg.remove());
+                    }
+                });
+                messageDiv.appendChild(deleteButton);
+            }
+
+            const contentDiv = document.createElement('div');
+            contentDiv.classList.add('message-content');
+
+            if (type === 'bot-message') {
+                contentDiv.innerHTML = marked.parse(text);
+            } else {
+                // Use textContent for user messages to prevent HTML injection
+                contentDiv.textContent = text;
+            }
+            messageDiv.appendChild(contentDiv);
 
             if (timestamp) {
                 const timeSpan = document.createElement('span');
                 timeSpan.classList.add('timestamp');
-                // Basic formatting, adjust as needed
                 timeSpan.textContent = new Date(timestamp).toLocaleString().replace(/:\d{2}\s/, ' ');
                 messageDiv.appendChild(timeSpan);
             }
 
-            // Insert before the anchor to keep the input area at the bottom
             chatbox.insertBefore(messageDiv, messageAnchor);
-            // Scroll to the anchor (which should be the bottom)
             messageAnchor.scrollIntoView({ behavior: 'smooth' });
-            return messageDiv; // Return the created div
+            return messageDiv;
         }
 
         function addBotMessageChunk(text, botMessageDiv) {
-            // Append text, preserving existing newlines and adding new ones
-            // Using textContent handles newlines correctly within the pre-wrap style
-            botMessageDiv.textContent += text;
+            // Append text and re-render markdown
+            const contentDiv = botMessageDiv.querySelector('.message-content');
+            const currentContent = botMessageDiv.dataset.rawContent || '';
+            const newContent = currentContent + text;
+            botMessageDiv.dataset.rawContent = newContent; // Store raw content
+            contentDiv.innerHTML = marked.parse(newContent);
+            addCopyButtons(contentDiv);
             messageAnchor.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function addCopyButtons(element) {
+            const codeBlocks = element.querySelectorAll('pre');
+            codeBlocks.forEach(pre => {
+                const code = pre.querySelector('code');
+                const copyButton = document.createElement('button');
+                copyButton.className = 'copy-button';
+                copyButton.textContent = 'Copy';
+                copyButton.addEventListener('click', () => {
+                    navigator.clipboard.writeText(code.innerText).then(() => {
+                        copyButton.textContent = 'Copied!';
+                        setTimeout(() => {
+                            copyButton.textContent = 'Copy';
+                        }, 2000);
+                    }, () => {
+                        copyButton.textContent = 'Error';
+                    });
+                });
+                pre.appendChild(copyButton);
+            });
         }
 
         async function sendMessage() {
@@ -83,22 +289,21 @@
 
             addMessage(message, 'user-message', new Date()); // Add user message immediately
             messageInput.value = ''; // Clear input
-            sendButton.disabled = true; // Disable button while processing
+            sendButton.style.display = 'none'; // Hide send button
+            stopButton.style.display = 'inline-block'; // Show stop button
             thinkingIndicator.style.display = 'inline'; // Show thinking indicator
+
+            abortController = new AbortController(); // Create a new controller for this request
+            const signal = abortController.signal;
 
             let currentBotMessageDiv = null; // To hold the div for the streaming bot response
 
             try {
-                // Use EventSource for simpler SSE handling
-                const eventSource = new EventSource(`/chat?message=${encodeURIComponent(message)}`); // Send message via query param for GET request SSE
-
-                // It's better practice to use POST for actions that change state (like sending a message and storing history)
-                // Let's stick to the POST request and handle the stream manually as planned before.
-
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: message })
+                    body: JSON.stringify({ message: message, conversation_id: currentConversationId }),
+                    signal: signal // Pass the signal to the fetch request
                 });
 
 
@@ -125,18 +330,30 @@
                 // Create the initial bot message div (empty)
                 currentBotMessageDiv = document.createElement('div');
                 currentBotMessageDiv.classList.add('message', 'bot-message');
+                currentBotMessageDiv.dataset.rawContent = ''; // Initialize raw content
+                const contentDiv = document.createElement('div');
+                contentDiv.classList.add('message-content');
+                currentBotMessageDiv.appendChild(contentDiv);
+                chatbox.insertBefore(currentBotMessageDiv, messageAnchor); // Add div to chatbox
+
                 // Add timestamp placeholder now
                 const timeSpan = document.createElement('span');
                 timeSpan.classList.add('timestamp');
                 timeSpan.textContent = new Date().toLocaleString().replace(/:\d{2}\s/, ' '); // Add time when response starts
-                currentBotMessageDiv.appendChild(timeSpan); // Append timestamp first
-                chatbox.insertBefore(currentBotMessageDiv, messageAnchor); // Add div to chatbox
+                currentBotMessageDiv.appendChild(timeSpan);
 
 
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) {
                         console.log('Stream finished.');
+                        // Final highlighting pass after stream is complete
+                        if (currentBotMessageDiv) {
+                            const codeBlocks = currentBotMessageDiv.querySelectorAll('pre code');
+                            codeBlocks.forEach((block) => {
+                                hljs.highlightElement(block);
+                            });
+                        }
                         break;
                     }
 
@@ -179,8 +396,10 @@
                     currentBotMessageDiv.textContent += " (Connection failed)"; // Indicate failure in the message div
                 }
             } finally {
-                sendButton.disabled = false; // Re-enable button
+                sendButton.style.display = 'inline-block'; // Re-show send button
+                stopButton.style.display = 'none'; // Hide stop button
                 thinkingIndicator.style.display = 'none'; // Hide thinking indicator
+                abortController = null; // Reset controller
                 messageAnchor.scrollIntoView({ behavior: 'smooth' }); // Ensure scrolled to bottom
             }
         }
@@ -193,11 +412,66 @@
             }
         });
 
+        stopButton.addEventListener('click', () => {
+            if (abortController) {
+                abortController.abort(); // Abort the fetch request
+                console.log("Fetch aborted by user.");
+            }
+        });
+
         // Initial scroll to bottom
         window.onload = () => {
             messageAnchor.scrollIntoView();
         }
 
+        // Theme switcher logic
+        const themeToggle = document.getElementById('theme-toggle');
+        const body = document.body;
+
+        themeToggle.addEventListener('change', () => {
+            if (themeToggle.checked) {
+                body.classList.add('dark-mode');
+                localStorage.setItem('theme', 'dark-mode');
+            } else {
+                body.classList.remove('dark-mode');
+                localStorage.setItem('theme', 'light-mode');
+            }
+        });
+
+        // Apply saved theme on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark-mode') {
+                body.classList.add('dark-mode');
+                themeToggle.checked = true;
+            }
+            // Add copy buttons to pre-loaded messages
+            document.querySelectorAll('.bot-message .message-content').forEach(addCopyButtons);
+        });
+
+        // Search functionality
+        const searchInput = document.getElementById('search-input');
+        searchInput.addEventListener('input', () => {
+            const searchTerm = searchInput.value.toLowerCase();
+            const messages = document.querySelectorAll('.message');
+            messages.forEach(msg => {
+                const content = msg.querySelector('.message-content').textContent.toLowerCase();
+                if (content.includes(searchTerm)) {
+                    msg.style.display = 'flex';
+                } else {
+                    msg.style.display = 'none';
+                }
+            });
+        });
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadConversations();
+        });
+
+        newChatButton.addEventListener('click', createNewChat);
+        saveSystemPromptButton.addEventListener('click', saveSystemPrompt);
+        modelSelect.addEventListener('change', saveModel);
     </script>
 </body>
 </html>
