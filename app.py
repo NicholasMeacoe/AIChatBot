@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, Response, stream_with_context, send_file, jsonify
+from flask_socketio import SocketIO
 import google.generativeai as genai
 import os
 import re
@@ -15,6 +16,11 @@ from datetime import datetime
 import requests # For fetching URL content
 from bs4 import BeautifulSoup # For parsing HTML
 import html  # Add this import at the top with other imports
+
+# Import enhanced features
+from routes.enhanced_routes import enhanced_bp
+from features.collaboration import CollaborationManager
+from features.analytics import AnalyticsManager
 
 # Load API Key
 load_dotenv()
@@ -38,6 +44,14 @@ DB_NAME = 'chat_history.db'
 
 # --- Flask App Setup ---
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Register enhanced features blueprint
+app.register_blueprint(enhanced_bp, url_prefix='/api')
+
+# Initialize collaboration manager
+collaboration_manager = CollaborationManager(socketio)
 
 # --- Database Setup ---
 def init_db():
@@ -481,11 +495,28 @@ def chat_endpoint():
     full_context_str = ""
     context_errors = []
     processed_paths_info = [] # To store info for DB logging
+    image_data = None  # Store image data for Gemini Vision
 
     if active_context_items:
         print(f"Processing active context: {active_context_items}") # Debug log
         for item_path in active_context_items:
-            if item_path.startswith('http://') or item_path.startswith('https://'):
+            if item_path.startswith('image:'):
+                # Handle uploaded images
+                try:
+                    parts = item_path.split(':', 2)
+                    if len(parts) == 3:
+                        _, filename, base64_data = parts
+                        image_data = base64_data
+                        full_context_str += f"--- IMAGE: {filename} ---\n[Image data included for analysis]\n\n"
+                        processed_paths_info.append({
+                            'original': filename,
+                            'status': 'ok',
+                            'context_added': True,
+                            'type': 'image'
+                        })
+                except Exception as e:
+                    context_errors.append(f"Error processing image: {e}")
+            elif item_path.startswith('http://') or item_path.startswith('https://'):
                 # Fetch and process URL content
                 context_part, error, path_info = fetch_and_process_url(item_path)
                 processed_paths_info.append(path_info) # Log URL processing attempt
@@ -534,19 +565,45 @@ def chat_endpoint():
                  return # Stop generation
 
             # To enable streaming: use stream=True
-            stream = current_model.generate_content(final_prompt, stream=True)
+            if image_data:
+                # Use Gemini Vision with image - proper format
+                import base64
+                
+                # Create proper image part for Gemini
+                image_part = {
+                    "mime_type": "image/jpeg",
+                    "data": image_data
+                }
+                
+                # Create content with image and text in correct format
+                content = [final_prompt, image_part]
+                
+                # Use non-streaming for vision to avoid issues
+                response = current_model.generate_content(content)
+                full_bot_response = response.text
+                
+                # Send as single chunk
+                data = json.dumps({"text": full_bot_response})
+                yield f"data: {data}\n\n"
+                yield f"data: {json.dumps({'end_stream': True})}\n\n"
+                
+                # Skip the streaming loop
+                stream = None
+            else:
+                stream = current_model.generate_content(final_prompt, stream=True)
 
             # Send context errors first, if any
             if context_errors:
                 error_data = json.dumps({"context_error": "\n".join(context_errors)})
                 yield f"data: {error_data}\n\n"
 
-            for chunk in stream:
-                if chunk.text:
-                    full_bot_response += chunk.text
-                    # Send chunk to client via SSE
-                    data = json.dumps({"text": chunk.text})
-                    yield f"data: {data}\n\n" # SSE format: data: <json_string>\n\n
+            if stream:  # Only process streaming if not vision
+                for chunk in stream:
+                    if chunk.text:
+                        full_bot_response += chunk.text
+                        # Send chunk to client via SSE
+                        data = json.dumps({"text": chunk.text})
+                        yield f"data: {data}\n\n" # SSE format: data: <json_string>\n\n
 
             # --- Save to Database ---
             # Save after the full response is generated
@@ -556,7 +613,18 @@ def chat_endpoint():
                 "INSERT INTO history (user_message, bot_response, context_info) VALUES (?, ?, ?)",
                 (original_user_message_for_db, full_bot_response, context_info_json) # Store original message + context info
             )
+            message_id = cursor.lastrowid
             conn.commit()
+            
+            # Index for search and track analytics
+            from features.search import SearchManager
+            search_manager = SearchManager(conn)
+            search_manager.index_message(message_id, original_user_message_for_db, full_bot_response, context_info_json)
+            search_manager.auto_tag_conversation(message_id, original_user_message_for_db + ' ' + full_bot_response)
+            
+            analytics = AnalyticsManager(conn)
+            analytics.track_event('message_sent', {'model': selected_model_name, 'context_items': len(active_context_items)})
+            
             conn.close()
             print(f"Saved interaction: User: '{user_message[:50]}...', Bot: '{full_bot_response[:50]}...'")
 
@@ -929,9 +997,10 @@ def suggest_path():
 
 if __name__ == '__main__':
     # Make sure .env is in the same directory or GOOGLE_API_KEY is set globally
-    print("Starting Flask server...")
+    print("Starting Enhanced Gemini Chat Server...")
     print("Ensure GOOGLE_API_KEY is set in a .env file or environment variables.")
     print(f"Database file: {os.path.abspath(DB_NAME)}")
+    print("Enhanced features available at /api/ endpoints")
     # Use debug=True for development, but turn off in production
     # Use host='0.0.0.0' to make it accessible on the network
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)

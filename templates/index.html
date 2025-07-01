@@ -318,6 +318,13 @@
               <path fill-rule="evenodd" d="M0 .5A.5.5 0 0 1 .5 0h4a.5.5 0 0 1 0 1h-4A.5.5 0 0 1 0 .5m0 2A.5.5 0 0 1 .5 2h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5m9 0a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5m-9 2A.5.5 0 0 1 .5 4h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5m5 0a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m-5 2A.5.5 0 0 1 .5 6h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5m8 0a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m-8 2A.5.5 0 0 1 .5 8h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5m7 0a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5m-7 2a.5.5 0 0 1 .5-.5h8a.5.5 0 0 1 0 1h-8a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5"/>
             </svg>
         </button>
+        <input type="file" id="image-upload" accept="image/*" style="display: none;">
+        <button id="image-upload-button" class="btn btn-outline-success btn-sm ms-2" title="Upload Image">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-image" viewBox="0 0 16 16">
+              <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+              <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1z"/>
+            </svg>
+        </button>
         <div id="thinking" class="align-self-center" style="display: none;"><span>.</span><span>.</span><span>.</span></div> <!-- Updated Thinking Indicator -->
     </div>
     <!-- Context Menu -->
@@ -382,6 +389,8 @@
         const activeContextList = document.getElementById('active-context-list'); // Get context list
         const clearContextButton = document.getElementById('clear-context-button'); // Get clear button
         const modelSelect = document.getElementById('model-select'); // Get model select dropdown
+        const imageUpload = document.getElementById('image-upload');
+        const imageUploadButton = document.getElementById('image-upload-button');
 
         let contextMenuVisible = false;
         let atSymbolPosition = -1; // Store position where '@' was typed
@@ -513,9 +522,9 @@
             // Be cautious with innerHTML if the source isn't trusted.
             // If text is plain, textContent is safer.
             if (type === 'bot-message') {
-                 // Example: Basic markdown link handling (needs a proper library for full support)
-                 text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-                 textSpan.innerHTML = text; // Allow basic HTML from bot
+                 // Convert markdown to HTML for bot messages
+                 text = convertMarkdownToHtml(text);
+                 textSpan.innerHTML = text; // Allow HTML from bot
             } else {
                  textSpan.textContent = text; // User messages as plain text
             }
@@ -551,11 +560,29 @@
             // Append text to the main text span, preserving existing newlines and basic HTML
             const textNode = botMessageDiv.querySelector('span:not(.timestamp)');
              if (textNode) {
-                 // Example: Basic markdown link handling during streaming
-                 text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+                 // Convert markdown to HTML
+                 text = convertMarkdownToHtml(text);
                  textNode.innerHTML += text; // Append HTML chunk
              }
             messageAnchor.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function convertMarkdownToHtml(text) {
+            return text
+                // Bold **text**
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                // Italic *text*
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                // Code `text`
+                .replace(/`([^`]+)`/g, '<code>$1</code>')
+                // Links [text](url)
+                .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+                // Headers ### text
+                .replace(/^### (.*$)/gm, '<h3>$1</h3>')
+                .replace(/^## (.*$)/gm, '<h2>$1</h2>')
+                .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+                // Line breaks
+                .replace(/\n/g, '<br>');
         }
 
         function updateTimestamp(messageDiv, timestamp) {
@@ -1242,7 +1269,55 @@ dateSelect.addEventListener('change', (event) => {
         });
         // --- End Context Summarization Logic ---
 
+        // --- Image Upload Logic ---
+        imageUploadButton.addEventListener('click', () => {
+            imageUpload.click();
+        });
+
+        imageUpload.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/multimodal/process', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+
+                if (result.type === 'image') {
+                    // Add image to active context as base64 data
+                    const contextItem = `image:${file.name}:${result.data}`;
+                    if (!activeContextItems.includes(contextItem)) {
+                        activeContextItems.push(contextItem);
+                        updateContextUI();
+                        addMessage(`Image uploaded: ${file.name}`, 'context-warning', new Date());
+                    }
+                } else if (result.type === 'error') {
+                    addMessage(`Error uploading image: ${result.message}`, 'error-message', new Date());
+                }
+            } catch (error) {
+                console.error('Image upload error:', error);
+                addMessage(`Error uploading image: ${error.message}`, 'error-message', new Date());
+            } finally {
+                imageUpload.value = ''; // Clear file input
+            }
+        });
+        // --- End Image Upload Logic ---
+
     </script>
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <!-- Enhanced Features -->
+    <script src="{{ url_for('static', filename='js/enhanced-features.js') }}"></script>
     <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js"></script>
 </body>
