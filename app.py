@@ -13,6 +13,9 @@ import sqlite3
 import json
 from dotenv import load_dotenv
 from datetime import datetime
+<<<<<<< HEAD
+import markdown
+from serpapi import GoogleSearch
 import requests # For fetching URL content
 from bs4 import BeautifulSoup # For parsing HTML
 import html  # Add this import at the top with other imports
@@ -26,6 +29,7 @@ from features.analytics import AnalyticsManager
 load_dotenv()
 API_KEY = os.getenv("GOOGLE_API_KEY")
 FETCHED_MODELS = [] # Global list to store fetched models
+
 
 # --- Configuration ---
 DEFAULT_MODEL_NAME = "gemini-2.5-pro-exp-03-25" # Fallback default
@@ -57,15 +61,59 @@ collaboration_manager = CollaborationManager(socketio)
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            user_message TEXT NOT NULL,
-            bot_response TEXT NOT NULL,
-            context_info TEXT NULL
-        )
-    ''')
+
+    # Check if conversations table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='conversations'")
+    if cursor.fetchone() is None:
+        # Create conversations table
+        cursor.execute('''
+            CREATE TABLE conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                system_prompt TEXT
+            )
+        ''')
+        # Add a default conversation
+        cursor.execute("INSERT INTO conversations (name) VALUES (?)", ("Default Conversation",))
+
+    cursor.execute("PRAGMA table_info(conversations)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'system_prompt' not in columns:
+        cursor.execute("ALTER TABLE conversations ADD COLUMN system_prompt TEXT")
+    if 'model' not in columns:
+        cursor.execute("ALTER TABLE conversations ADD COLUMN model TEXT")
+
+    # Check if history table needs to be updated
+    cursor.execute("PRAGMA table_info(history)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'conversation_id' not in columns:
+        # Schema migration
+        cursor.execute("ALTER TABLE history RENAME TO history_old")
+        cursor.execute('''
+            CREATE TABLE history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id INTEGER NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                user_message TEXT NOT NULL,
+                bot_response TEXT NOT NULL,
+                context_info TEXT NULL,
+                FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+            )
+        ''')
+        # Get the ID of the default conversation
+        cursor.execute("SELECT id FROM conversations WHERE name = ?", ("Default Conversation",))
+        default_convo_id = cursor.fetchone()[0]
+        # Copy data from old table
+        cursor.execute("SELECT timestamp, user_message, bot_response, context_info FROM history_old")
+        old_history = cursor.fetchall()
+        for row in old_history:
+            cursor.execute(
+                "INSERT INTO history (conversation_id, timestamp, user_message, bot_response, context_info) VALUES (?, ?, ?, ?, ?)",
+                (default_convo_id, row[0], row[1], row[2], row[3])
+            )
+        cursor.execute("DROP TABLE history_old")
+
     conn.commit()
     conn.close()
 
@@ -116,6 +164,7 @@ if not API_KEY:
     print("Error: GOOGLE_API_KEY not found in .env file. Using default model list.")
     FETCHED_MODELS = [DEFAULT_MODEL_NAME]
 else:
+<<<<<<< HEAD
     try:
         genai.configure(api_key=API_KEY)
         print("Gemini API Key configured.")
@@ -418,53 +467,90 @@ def parse_input_for_context(user_input):
 
 @app.route('/')
 def index():
-    """Render the main chat page and load history, optionally filtered by date."""
+    """Render the main chat page."""
+    return render_template('index.html')
+
+@app.route('/api/conversations', methods=['GET'])
+def get_conversations():
+    """Get a list of all conversations."""
     conn = get_db()
     cursor = conn.cursor()
-
-    # Get distinct dates for the dropdown
-    cursor.execute("SELECT DISTINCT DATE(timestamp) as chat_date FROM history ORDER BY chat_date DESC")
-    available_dates = [row['chat_date'] for row in cursor.fetchall()]
-
-    # Get selected date from query parameters
-    selected_date = request.args.get('date')
-
-    # Fetch and encode history
-    if selected_date:
-        try:
-            datetime.strptime(selected_date, '%Y-%m-%d')
-            cursor.execute(
-                "SELECT user_message, bot_response, timestamp FROM history WHERE DATE(timestamp) = ? ORDER BY timestamp ASC",
-                (selected_date,)
-            )
-        except ValueError:
-            cursor.execute("SELECT user_message, bot_response, timestamp FROM history ORDER BY timestamp ASC")
-            selected_date = None
-    else:
-        cursor.execute("SELECT user_message, bot_response, timestamp FROM history ORDER BY timestamp ASC")
-
-    # HTML encode the history data
-    history = [{
-        'user_message': html.escape(row['user_message']),
-        'bot_response': html.escape(row['bot_response']),
-        'timestamp': row['timestamp']
-    } for row in cursor.fetchall()]
-    
+    cursor.execute("SELECT id, name, timestamp, system_prompt, model FROM conversations ORDER BY timestamp DESC")
+    conversations = cursor.fetchall()
     conn.close()
-    
-    return render_template(
-        'index.html',
-        history=history,
-        available_dates=available_dates,
-        selected_date=selected_date,
-        available_models=FETCHED_MODELS,
-        default_model=DEFAULT_MODEL_NAME,
-        usage_limits=FREE_TIER_LIMITS
-    )
+    return json.dumps([dict(row) for row in conversations])
+
+@app.route('/api/history/<int:conversation_id>', methods=['GET'])
+def get_history(conversation_id):
+    """Get the history for a specific conversation."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, user_message, bot_response, timestamp FROM history WHERE conversation_id = ? ORDER BY timestamp ASC", (conversation_id,))
+    history_raw = cursor.fetchall()
+    conn.close()
+
+    history = []
+    for row in history_raw:
+        history.append({
+            'id': row['id'],
+            'user_message': row['user_message'],
+            'bot_response': markdown.markdown(row['bot_response'], extensions=['fenced_code']),
+            'timestamp': row['timestamp']
+        })
+    return json.dumps(history)
+
+@app.route('/api/conversations', methods=['POST'])
+def create_conversation():
+    """Create a new conversation."""
+    conn = get_db()
+    cursor = conn.cursor()
+    # Generate a default name for the new conversation
+    cursor.execute("SELECT COUNT(*) FROM conversations")
+    count = cursor.fetchone()[0]
+    new_name = f"Conversation {count + 1}"
+    cursor.execute("INSERT INTO conversations (name) VALUES (?)", (new_name,))
+    new_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return json.dumps({'id': new_id, 'name': new_name})
+
+@app.route('/api/history/<int:message_id>', methods=['DELETE'])
+def delete_message(message_id):
+    """Delete a message from the history."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM history WHERE id = ?", (message_id,))
+    conn.commit()
+    conn.close()
+    return json.dumps({'status': 'ok'})
+
+@app.route('/api/conversations/<int:conversation_id>/system_prompt', methods=['PUT'])
+def update_system_prompt(conversation_id):
+    """Update the system prompt for a conversation."""
+    conn = get_db()
+    cursor = conn.cursor()
+    system_prompt = request.json.get('system_prompt')
+    cursor.execute("UPDATE conversations SET system_prompt = ? WHERE id = ?", (system_prompt, conversation_id))
+    conn.commit()
+    conn.close()
+    return json.dumps({'status': 'ok'})
+
+@app.route('/api/conversations/<int:conversation_id>/model', methods=['PUT'])
+def update_model(conversation_id):
+    """Update the model for a conversation."""
+    conn = get_db()
+    cursor = conn.cursor()
+    model = request.json.get('model')
+    cursor.execute("UPDATE conversations SET model = ? WHERE id = ?", (model, conversation_id))
+    conn.commit()
+    conn.close()
+    return json.dumps({'status': 'ok'})
+
 
 @app.route('/chat', methods=['POST'])
 def chat_endpoint():
     """Handle incoming chat messages and stream responses."""
+<<<<<<< HEAD
     global FETCHED_MODELS  # Add this line
     if not API_KEY:
          return Response(json.dumps({"error": "Gemini API Key not configured."}), status=500, mimetype='application/json')
@@ -473,6 +559,7 @@ def chat_endpoint():
     user_message = data.get('message')
     active_context_items = data.get('active_context', []) # Get active context list
     selected_model_name = data.get('model_name', DEFAULT_MODEL_NAME) # Get selected model or use default
+    conversation_id = data.get('conversation_id')
 
     # Validate selected model against the fetched list
     if selected_model_name not in FETCHED_MODELS:
@@ -490,6 +577,48 @@ def chat_endpoint():
 
     if not user_message:
         return Response(json.dumps({"error": "No message provided."}), status=400, mimetype='application/json')
+    if not conversation_id:
+        return Response(json.dumps({"error": "No conversation_id provided."}), status=400, mimetype='application/json')
+
+
+    # --- Get System Prompt ---
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT system_prompt, model FROM conversations WHERE id = ?", (conversation_id,))
+    result = cursor.fetchone()
+    conn.close()
+    system_prompt = result['system_prompt'] if result and result['system_prompt'] else ""
+    model_name = result['model'] if result and result['model'] else MODEL_NAME
+
+    # --- Web Search ---
+    if user_message.strip().startswith("/search"):
+        query = user_message.strip().replace("/search", "").strip()
+        if not query:
+            return Response(json.dumps({"error": "Search query cannot be empty."}), status=400, mimetype='application/json')
+        
+        serpapi_key = os.getenv("SERPAPI_API_KEY")
+        if not serpapi_key:
+            return Response(json.dumps({"error": "SERPAPI_API_KEY not found in .env file."}), status=500, mimetype='application/json')
+
+        try:
+            params = {
+                "q": query,
+                "api_key": serpapi_key,
+            }
+            search = GoogleSearch(params)
+            results = search.get_dict()
+            
+            # Extract relevant info from results
+            search_context = f"Web search results for '{query}':\n"
+            if "organic_results" in results:
+                for result in results["organic_results"][:5]: # Top 5 results
+                    search_context += f"- {result.get('title', '')}: {result.get('snippet', '')}\n"
+            
+            # Prepend search results to the user message
+            user_message = f"{search_context}\nBased on the above search results, please answer the following question: {query}"
+
+        except Exception as e:
+            return Response(json.dumps({"error": f"Web search failed: {e}"}), status=500, mimetype='application/json')
 
     # --- Process Active Context Items ---
     full_context_str = ""
@@ -497,6 +626,7 @@ def chat_endpoint():
     processed_paths_info = [] # To store info for DB logging
     image_data = None  # Store image data for Gemini Vision
 
+<<<<<<< HEAD
     if active_context_items:
         print(f"Processing active context: {active_context_items}") # Debug log
         for item_path in active_context_items:
@@ -545,10 +675,18 @@ def chat_endpoint():
     if not final_prompt.strip() and not context_errors:
          return Response(json.dumps({"error": "Cannot send an empty message."}), status=400, mimetype='application/json')
 
+    try:
+        genai.configure(api_key=API_KEY)
+        model = genai.GenerativeModel(model_name)
+        print(f"Using Gemini model '{model_name}' for convo {conversation_id}.")
+    except Exception as e:
+        return Response(json.dumps({"error": f"Error initializing Gemini model: {e}"}), status=500, mimetype='application/json')
+
     # --- Streaming Response ---
     def generate_response():
         full_bot_response = ""
         try:
+<<<<<<< HEAD
             # Start a new chat session for each request OR manage sessions if needed
             # For simplicity, starting fresh each time. For history continuity with Gemini,
             # you'd need session management (e.g., using Flask sessions or a cache).
@@ -591,7 +729,6 @@ def chat_endpoint():
                 stream = None
             else:
                 stream = current_model.generate_content(final_prompt, stream=True)
-
             # Send context errors first, if any
             if context_errors:
                 error_data = json.dumps({"context_error": "\n".join(context_errors)})
@@ -610,8 +747,8 @@ def chat_endpoint():
             conn = get_db()
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO history (user_message, bot_response, context_info) VALUES (?, ?, ?)",
-                (original_user_message_for_db, full_bot_response, context_info_json) # Store original message + context info
+                "INSERT INTO history (conversation_id, user_message, bot_response, context_info) VALUES (?, ?, ?, ?)",
+                (conversation_id, original_user_message_for_db, full_bot_response, context_info_json) # Store original message + context info
             )
             message_id = cursor.lastrowid
             conn.commit()
@@ -626,7 +763,7 @@ def chat_endpoint():
             analytics.track_event('message_sent', {'model': selected_model_name, 'context_items': len(active_context_items)})
             
             conn.close()
-            print(f"Saved interaction: User: '{user_message[:50]}...', Bot: '{full_bot_response[:50]}...'")
+            print(f"Saved interaction to convo {conversation_id}: User: '{user_message[:50]}...', Bot: '{full_bot_response[:50]}...'")
 
             # Signal end of stream (optional, depends on client handling)
             yield f"data: {json.dumps({'end_stream': True})}\n\n"
