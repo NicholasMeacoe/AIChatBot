@@ -108,9 +108,15 @@
             <textarea id="system-prompt-input" placeholder="Enter a system prompt for this conversation..."></textarea>
             <button id="save-system-prompt">Save</button>
             <select id="model-select">
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-                <option value="gemini-pro">Gemini Pro</option>
+                {% if available_models %}
+                    {% for model in available_models %}
+                        <option value="{{ model }}" {% if model == default_model %}selected{% endif %}>
+                            {{ model.replace("models/", "") }} {# More user-friendly display #}
+                        </option>
+                    {% endfor %}
+                {% else %}
+                    <option value="{{ default_model }}" selected>{{ default_model.replace("models/", "") }}</option>
+                {% endif %}
             </select>
         </div>
         <input type="text" id="search-input" placeholder="Search history..." style="width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 3px; border: 1px solid #ccc;">
