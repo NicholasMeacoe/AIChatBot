@@ -13,7 +13,6 @@ import sqlite3
 import json
 from dotenv import load_dotenv
 from datetime import datetime
-<<<<<<< HEAD
 import markdown
 from serpapi import GoogleSearch
 import requests # For fetching URL content
@@ -164,7 +163,6 @@ if not API_KEY:
     print("Error: GOOGLE_API_KEY not found in .env file. Using default model list.")
     FETCHED_MODELS = [DEFAULT_MODEL_NAME]
 else:
-<<<<<<< HEAD
     try:
         genai.configure(api_key=API_KEY)
         print("Gemini API Key configured.")
@@ -550,7 +548,6 @@ def update_model(conversation_id):
 @app.route('/chat', methods=['POST'])
 def chat_endpoint():
     """Handle incoming chat messages and stream responses."""
-<<<<<<< HEAD
     global FETCHED_MODELS  # Add this line
     if not API_KEY:
          return Response(json.dumps({"error": "Gemini API Key not configured."}), status=500, mimetype='application/json')
@@ -626,7 +623,7 @@ def chat_endpoint():
     processed_paths_info = [] # To store info for DB logging
     image_data = None  # Store image data for Gemini Vision
 
-<<<<<<< HEAD
+
     if active_context_items:
         print(f"Processing active context: {active_context_items}") # Debug log
         for item_path in active_context_items:
@@ -686,7 +683,7 @@ def chat_endpoint():
     def generate_response():
         full_bot_response = ""
         try:
-<<<<<<< HEAD
+
             # Start a new chat session for each request OR manage sessions if needed
             # For simplicity, starting fresh each time. For history continuity with Gemini,
             # you'd need session management (e.g., using Flask sessions or a cache).

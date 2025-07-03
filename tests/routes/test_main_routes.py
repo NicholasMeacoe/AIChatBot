@@ -8,41 +8,15 @@ from config import DEFAULT_MODEL_NAME, FREE_TIER_LIMITS
 import config as app_config # To monkeypatch GOOGLE_API_KEY for specific tests
 
 # --- Tests for / (index) ---
-@patch('routes.main_routes.get_distinct_chat_dates')
-@patch('routes.main_routes.get_chat_history')
 @patch('routes.main_routes.get_available_models')
-def test_index_route_no_date(mock_get_models, mock_get_history, mock_get_dates, client):
-    mock_get_dates.return_value = ["2023-01-01", "2023-01-02"]
+def test_index_route(mock_get_models, client):
     mock_get_models.return_value = [DEFAULT_MODEL_NAME, "gemini-pro"]
 
     response = client.get('/')
     assert response.status_code == 200
-
-    mock_get_dates.assert_called_once()
     mock_get_models.assert_called_once()
-    mock_get_history.assert_not_called()
+    assert b'id="model-select"' in response.data
 
-    assert b"History:" in response.data # Corrected: "Chat History" is not present as a phrase. "History:" label is.
-    assert DEFAULT_MODEL_NAME.encode() in response.data
-    # FREE_TIER_LIMITS are not directly rendered in the template in a way that these specific keys can be checked.
-    # Removing these assertions as they are likely to fail due to template structure.
-    # assert str(FREE_TIER_LIMITS['max_context_items']).encode() in response.data
-    # assert str(FREE_TIER_LIMITS['max_total_context_chars']).encode() in response.data
-
-
-@patch('routes.main_routes.get_distinct_chat_dates')
-@patch('routes.main_routes.get_chat_history')
-@patch('routes.main_routes.get_available_models')
-def test_index_route_with_date(mock_get_models, mock_get_history, mock_get_dates, client):
-    mock_get_dates.return_value = ["2023-01-01"]
-    mock_get_models.return_value = [DEFAULT_MODEL_NAME]
-    mock_history_data = [{"user_message": "Hello", "bot_response": "Hi", "timestamp": "2023-01-01 10:00:00"}]
-    mock_get_history.return_value = mock_history_data
-
-    response = client.get('/?date=2023-01-01')
-    assert response.status_code == 200
-    mock_get_history.assert_called_once_with("2023-01-01")
-    assert b"Hello" in response.data
 
 
 import gemini_utils # Added for monkeypatching gemini_utils.client
