@@ -15,7 +15,13 @@ import json
 from dotenv import load_dotenv
 from datetime import datetime
 import markdown
-from serpapi import GoogleSearch
+try:
+    from serpapi import GoogleSearch
+    SERPAPI_AVAILABLE = True
+except ImportError:
+    print("Warning: serpapi not available. Web search functionality will be disabled.")
+    GoogleSearch = None
+    SERPAPI_AVAILABLE = False
 import requests # For fetching URL content
 from bs4 import BeautifulSoup # For parsing HTML
 import html  # Add this import at the top with other imports
@@ -599,6 +605,9 @@ def chat_endpoint():
         serpapi_key = os.getenv("SERPAPI_API_KEY")
         if not serpapi_key:
             return Response(json.dumps({"error": "SERPAPI_API_KEY not found in .env file."}), status=500, mimetype='application/json')
+
+        if not SERPAPI_AVAILABLE:
+            return Response(json.dumps({"error": "serpapi package not installed. Please install with: pip install google-search-results"}), status=500, mimetype='application/json')
 
         try:
             params = {
