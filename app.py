@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, Response, stream_with_context, send_file, jsonify
+from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO
 import google.generativeai as genai
 import os
@@ -466,7 +467,9 @@ def parse_input_for_context(user_input):
 @app.route('/')
 def index():
     """Render the main chat page."""
-    return render_template('index.html')
+    return render_template('index.html', 
+                         available_models=FETCHED_MODELS,
+                         default_model=DEFAULT_MODEL_NAME)
 
 @app.route('/api/conversations', methods=['GET'])
 def get_conversations():
@@ -1058,6 +1061,58 @@ def list_folders_endpoint():
     # If the root itself needs to be selectable, the frontend logic might need adjustment.
 
     return jsonify(sorted(all_folders))
+
+
+# --- Context Menu Routes (for frontend compatibility) ---
+@app.route('/context/files')
+def context_files():
+    """Get files for context menu."""
+    return list_files_endpoint()
+
+@app.route('/context/folders')
+def context_folders():
+    """Get folders for context menu."""
+    return list_folders_endpoint()
+
+@app.route('/upload_image', methods=['POST'])
+def upload_image():
+    """Handle image upload for context."""
+    if 'image' not in request.files:
+        return jsonify({'type': 'error', 'message': 'No image file provided'}), 400
+    
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'type': 'error', 'message': 'No file selected'}), 400
+    
+    if file and allowed_file(file.filename):
+        try:
+            # Save the file to allowed_context directory
+            filename = secure_filename(file.filename)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique_filename = f"{timestamp}_{filename}"
+            filepath = os.path.join(ALLOWED_CONTEXT_DIR, unique_filename)
+            
+            file.save(filepath)
+            
+            return jsonify({
+                'type': 'success',
+                'message': 'Image uploaded successfully',
+                'context_item': {
+                    'path': unique_filename,
+                    'display_name': filename
+                }
+            })
+        except Exception as e:
+            return jsonify({'type': 'error', 'message': f'Failed to save image: {str(e)}'}), 500
+    else:
+        return jsonify({'type': 'error', 'message': 'Invalid file type'}), 400
+
+def allowed_file(filename):
+    """Check if file extension is allowed for images."""
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
 
 
 # --- Path Suggestion Route (Kept for potential future use or different trigger) ---
