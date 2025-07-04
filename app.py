@@ -38,7 +38,7 @@ FETCHED_MODELS = [] # Global list to store fetched models
 
 
 # --- Configuration ---
-DEFAULT_MODEL_NAME = "gemini-2.5-pro-exp-03-25" # Fallback default
+DEFAULT_MODEL_NAME = "gemini-2.5-flash" # Fallback default
 # Note: Free tier limits can change. These are examples based on typical free tiers.
 # Users should verify current limits in their Google Cloud Console.
 FREE_TIER_LIMITS = {

@@ -97,7 +97,7 @@ class SmartContextManager:
         
         try:
             genai.configure(api_key=self.api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash-latest')
+            model = genai.GenerativeModel('gemini-2.5-flash')
             
             prompt = f"""
             Rate the relevance of these context items to the conversation (0-1 scale):
