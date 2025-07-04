@@ -123,6 +123,21 @@
             <button id="stop-button" style="display: none;">Stop</button>
             <span id="thinking">Thinking...</span>
         </div>
+
+        <!-- Image to PDF Conversion Area -->
+        <div id="pdf-conversion-area" class="mt-3 p-3 border rounded shadow-sm d-flex flex-column gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <label for="image-input" class="form-label mb-0">Convert JPEGs to PDF:</label>
+                <input type="file" id="image-input" class="form-control form-control-sm flex-grow-1" accept=".jpeg,.jpg" multiple>
+                <button id="convert-button" class="btn btn-sm btn-success">Convert & Download</button>
+            </div>
+            <div class="form-check">
+                 <input class="form-check-input" type="checkbox" id="ocr-checkbox" name="ocr">
+                 <label class="form-check-label text-muted small" for="ocr-checkbox">Make text selectable (OCR)? (Requires Tesseract)</label>
+            </div>
+            <span id="conversion-status" class="text-muted small" style="min-height: 1.2em;"></span>
+        </div>
+        <!-- End Image to PDF Conversion Area -->
     </div>
     <script>
         const chatbox = document.getElementById('chatbox');
@@ -136,6 +151,10 @@
         const systemPromptInput = document.getElementById('system-prompt-input');
         const saveSystemPromptButton = document.getElementById('save-system-prompt');
         const modelSelect = document.getElementById('model-select');
+        const imageInput = document.getElementById('image-input');
+        const convertButton = document.getElementById('convert-button');
+        const conversionStatus = document.getElementById('conversion-status');
+        const ocrCheckbox = document.getElementById('ocr-checkbox');
         let abortController = null;
         let currentConversationId = null;
 
@@ -468,6 +487,68 @@
             loadConversations();
         });
 
+        // --- PDF Conversion Logic ---
+        async function convertImagesToPdf() {
+            const files = imageInput.files;
+            if (!files || files.length === 0) {
+                conversionStatus.textContent = 'Please select one or more JPEG/JPG files.';
+                return;
+            }
+
+            convertButton.disabled = true;
+            conversionStatus.textContent = `Converting ${files.length} image(s)...`;
+
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('images', file); // Use 'images' as the key
+            }
+            // Add OCR flag to form data
+            formData.append('ocr_enabled', ocrCheckbox.checked);
+
+            try {
+                const response = await fetch('/convert', {
+                    method: 'POST',
+                    body: formData // Send files as FormData
+                    // No 'Content-Type' header needed, browser sets it for FormData
+                });
+
+                if (!response.ok) {
+                    let errorMsg = `Error ${response.status}: ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMsg = `Error: ${errorData.error || errorMsg}`;
+                    } catch (e) {
+                        // Ignore if response is not JSON
+                    }
+                    throw new Error(errorMsg);
+                }
+
+                // Handle the PDF download
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                // Create a filename like "converted_images_YYYYMMDD_HHMMSS.pdf"
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[-T:]/g, '');
+                a.download = `converted_images_${timestamp}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+                conversionStatus.textContent = `Successfully converted ${files.length} image(s). Download started.`;
+                imageInput.value = ''; // Clear file input
+
+            } catch (error) {
+                console.error('Conversion error:', error);
+                conversionStatus.textContent = `Conversion failed: ${error.message}`;
+            } finally {
+                convertButton.disabled = false;
+            }
+        }
+        // --- End PDF Conversion Logic ---
+
+        convertButton.addEventListener('click', convertImagesToPdf);
         newChatButton.addEventListener('click', createNewChat);
         saveSystemPromptButton.addEventListener('click', saveSystemPrompt);
         modelSelect.addEventListener('change', saveModel);
