@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="auto">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Gemini Chat</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-danger">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">
+                <i class="bi bi-shield-lock"></i> Admin Panel
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="{{ url_for('main.index') }}">
+                    <i class="bi bi-house"></i> Home
+                </a>
+                <a class="nav-link" href="{{ url_for('auth.profile') }}">
+                    <i class="bi bi-person-circle"></i> Profile
+                </a>
+                <a class="nav-link" href="{{ url_for('auth.logout') }}">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Statistics Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4>{{ users|length }}</h4>
+                                <p class="mb-0">Total Users</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="bi bi-people fs-1"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4>{{ users|selectattr('is_active')|list|length }}</h4>
+                                <p class="mb-0">Active Users</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="bi bi-person-check fs-1"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4>{{ users|selectattr('role', 'equalto', 'admin')|list|length }}</h4>
+                                <p class="mb-0">Administrators</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="bi bi-shield-check fs-1"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h4>{{ users|sum(attribute='request_count') }}</h4>
+                                <p class="mb-0">Total Requests</p>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="bi bi-graph-up fs-1"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Management -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-people"></i> User Management</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Last Login</th>
+                                <th>Requests</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-person-circle fs-4 me-2"></i>
+                                        <div>
+                                            <strong>{{ user.name }}</strong><br>
+                                            <small class="text-muted">ID: {{ user.id[:8] }}...</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{{ user.email }}</td>
+                                <td>
+                                    <select class="form-select form-select-sm role-select" 
+                                            data-user-id="{{ user.id }}" 
+                                            data-current-role="{{ user.role }}">
+                                        <option value="user" {{ 'selected' if user.role == 'user' else '' }}>User</option>
+                                        <option value="admin" {{ 'selected' if user.role == 'admin' else '' }}>Admin</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ 'success' if user.is_active else 'danger' }}">
+                                        {{ 'Active' if user.is_active else 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <small>{{ user.created_at.strftime('%m/%d/%Y') if user.created_at else 'N/A' }}</small>
+                                </td>
+                                <td>
+                                    <small>{{ user.last_login.strftime('%m/%d/%Y %H:%M') if user.last_login else 'Never' }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ 'warning' if user.request_count > 50 else 'info' }}">
+                                        {{ user.request_count }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        {% if user.is_active %}
+                                            <a href="{{ url_for('auth.deactivate_user', user_id=user.id) }}" 
+                                               class="btn btn-outline-danger btn-sm"
+                                               onclick="return confirm('Are you sure you want to deactivate this user?')">
+                                                <i class="bi bi-person-x"></i>
+                                            </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Actions -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5><i class="bi bi-gear"></i> System Actions</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Rate Limiting</h6>
+                        <p class="text-muted">Reset all user request counts</p>
+                        <button class="btn btn-warning" onclick="resetRateLimits()">
+                            <i class="bi bi-arrow-clockwise"></i> Reset Rate Limits
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>System Status</h6>
+                        <p class="text-muted">View system configuration and status</p>
+                        <button class="btn btn-info" onclick="showSystemInfo()">
+                            <i class="bi bi-info-circle"></i> System Info
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Info Modal -->
+    <div class="modal fade" id="systemInfoModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">System Information</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Authentication</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>Provider:</strong> {{ config.OAUTH2_PROVIDER.title() }}</li>
+                                <li><strong>Role-based Access:</strong> {{ 'Enabled' if config.ENABLE_ROLE_BASED_ACCESS else 'Disabled' }}</li>
+                                <li><strong>Rate Limiting:</strong> {{ 'Enabled' if config.ENABLE_RATE_LIMITING else 'Disabled' }}</li>
+                                <li><strong>Rate Limit:</strong> {{ config.RATE_LIMIT_PER_USER }} requests/hour</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Configuration</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>Default Role:</strong> {{ config.DEFAULT_USER_ROLE.title() }}</li>
+                                <li><strong>Admin Emails:</strong> {{ config.ADMIN_EMAILS|length }} configured</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Handle role changes
+        document.querySelectorAll('.role-select').forEach(select => {
+            select.addEventListener('change', function() {
+                const userId = this.dataset.userId;
+                const newRole = this.value;
+                const currentRole = this.dataset.currentRole;
+                
+                if (newRole === currentRole) return;
+                
+                if (confirm(`Are you sure you want to change this user's role to ${newRole}?`)) {
+                    updateUserRole(userId, newRole, this);
+                } else {
+                    this.value = currentRole; // Reset to original value
+                }
+            });
+        });
+
+        function updateUserRole(userId, newRole, selectElement) {
+            fetch(`/auth/admin/users/${userId}/role`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    role: newRole
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    selectElement.dataset.currentRole = newRole;
+                    showAlert('User role updated successfully', 'success');
+                } else {
+                    selectElement.value = selectElement.dataset.currentRole;
+                    showAlert('Error updating user role: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                selectElement.value = selectElement.dataset.currentRole;
+                showAlert('Error updating user role', 'danger');
+            });
+        }
+
+        function resetRateLimits() {
+            if (confirm('Are you sure you want to reset all user rate limits?')) {
+                // This would need to be implemented as an endpoint
+                showAlert('Rate limits reset functionality would be implemented here', 'info');
+            }
+        }
+
+        function showSystemInfo() {
+            const modal = new bootstrap.Modal(document.getElementById('systemInfoModal'));
+            modal.show();
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="auto">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f8f9fa;
+            --chatbox-bg: #ffffff;
+            --border-color: #dee2e6;
+            --text-color: #212529;
+            --secondary-text: #6c757d;
+            --user-msg-bg: linear-gradient(135deg, #007bff, #0056b3);
+            --bot-msg-bg: #e9ecef;
+            --bot-msg-text: #343a40;
+            --error-bg: #f8d7da;
+            --error-text: #721c24;
+            --error-border: #f5c6cb;
+            --warning-bg: #fff3cd;
+            --warning-text: #856404;
+            --warning-border: #ffeeba;
+            --button-bg: #007bff;
+            --button-hover-bg: #0056b3;
+            --button-disabled-bg: #ced4da;
+            --input-border: #ced4da;
+            --font-family: 'Inter', sans-serif;
+        }
+
+        [data-bs-theme="dark"] {
+            --bg-color: #212529;
+            --chatbox-bg: #343a40;
+            --border-color: #495057;
+            --text-color: #f8f9fa;
+            --secondary-text: #adb5bd;
+            --user-msg-bg: linear-gradient(135deg, #0d6efd, #084298);
+            --bot-msg-bg: #495057;
+            --bot-msg-text: #f8f9fa;
+            --error-bg: #842029;
+            --error-text: #f8d7da;
+            --error-border: #a52834;
+            --warning-bg: #664d03;
+            --warning-text: #fff3cd;
+            --warning-border: #997404;
+            --button-bg: #0d6efd;
+            --button-hover-bg: #084298;
+            --button-disabled-bg: #6c757d;
+            --input-border: #6c757d;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header with user info */
+        .app-header {
+            background: var(--chatbox-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .app-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-color);
+            margin: 0;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--user-msg-bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+        }
+
+        .user-details {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .user-role {
+            font-size: 0.8rem;
+            color: var(--secondary-text);
+        }
+
+        .rate-limit-indicator {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 1rem;
+            background: var(--warning-bg);
+            color: var(--warning-text);
+        }
+
+        .rate-limit-indicator.ok {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        /* Main content area */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 300px;
+            background: var(--chatbox-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+        }
+
+        .model-selector {
+            margin-bottom: 1rem;
+        }
+
+        .history-controls {
+            margin-bottom: 1rem;
+        }
+
+        /* Chat area */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 1rem;
+        }
+
+        .chatbox {
+            flex: 1;
+            overflow-y: auto;
+            background: var(--chatbox-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .message {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background: var(--user-msg-bg);
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .bot-message {
+            background: var(--bot-msg-bg);
+            color: var(--bot-msg-text);
+            margin-right: auto;
+        }
+
+        .message-header {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Input area */
+        .input-container {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-end;
+        }
+
+        .message-input {
+            flex: 1;
+            min-height: 2.5rem;
+            max-height: 8rem;
+            padding: 0.75rem;
+            border: 1px solid var(--input-border);
+            border-radius: 0.5rem;
+            background: var(--chatbox-bg);
+            color: var(--text-color);
+            resize: vertical;
+        }
+
+        .send-button {
+            background: var(--button-bg);
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .send-button:hover:not(:disabled) {
+            background: var(--button-hover-bg);
+        }
+
+        .send-button:disabled {
+            background: var(--button-disabled-bg);
+            cursor: not-allowed;
+        }
+
+        /* Context area */
+        .active-context {
+            background: var(--chatbox-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+            display: none;
+        }
+
+        .active-context.show {
+            display: block;
+        }
+
+        .context-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.25rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .context-item:last-child {
+            border-bottom: none;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                max-height: 200px;
+                overflow-y: auto;
+            }
+            
+            .user-info {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+        }
+
+        /* Theme toggle */
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="app-header">
+        <h1 class="app-title">
+            <i class="bi bi-chat-dots"></i> Gemini Chat
+        </h1>
+        <div class="user-info">
+            {% if user %}
+            <div class="user-avatar">
+                {{ user.name[0].upper() }}
+            </div>
+            <div class="user-details">
+                <div class="user-name">{{ user.name }}</div>
+                <div class="user-role">{{ user.role.title() }}</div>
+            </div>
+            <div class="rate-limit-indicator {{ 'ok' if user.can_make_request() else 'warning' }}">
+                {{ user.request_count }}/{{ 100 }} requests
+            </div>
+            {% endif %}
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-circle"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}">
+                        <i class="bi bi-person"></i> Profile
+                    </a></li>
+                    {% if user and user.is_admin() %}
+                    <li><a class="dropdown-item" href="{{ url_for('auth.admin_panel') }}">
+                        <i class="bi bi-gear"></i> Admin Panel
+                    </a></li>
+                    {% endif %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </a></li>
+                </ul>
+            </div>
+            <button class="theme-toggle" onclick="toggleTheme()">
+                <i class="bi bi-moon-stars" id="theme-icon"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <!-- Model Selection -->
+            <div class="model-selector">
+                <label for="model-select" class="form-label">
+                    <i class="bi bi-cpu"></i> AI Model
+                </label>
+                <select id="model-select" class="form-select">
+                    {% for model in models %}
+                    <option value="{{ model }}">{{ model }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- History Controls -->
+            <div class="history-controls">
+                <label for="history-select" class="form-label">
+                    <i class="bi bi-clock-history"></i> Chat History
+                </label>
+                <select id="history-select" class="form-select mb-2">
+                    <option value="all">All History</option>
+                </select>
+                <button id="delete-history-btn" class="btn btn-outline-danger btn-sm w-100" disabled>
+                    <i class="bi bi-trash"></i> Delete Selected Date
+                </button>
+            </div>
+
+            <!-- Context Management -->
+            <div class="context-management">
+                <label class="form-label">
+                    <i class="bi bi-paperclip"></i> Context
+                </label>
+                <div class="btn-group w-100 mb-2">
+                    <button class="btn btn-outline-primary btn-sm" onclick="addFileContext()">
+                        <i class="bi bi-file-text"></i> File
+                    </button>
+                    <button class="btn btn-outline-primary btn-sm" onclick="addUrlContext()">
+                        <i class="bi bi-link"></i> URL
+                    </button>
+                    <button class="btn btn-outline-info btn-sm" onclick="summarizeContext()">
+                        <i class="bi bi-list-ul"></i> Summarize
+                    </button>
+                </div>
+            </div>
+
+            <!-- Feature Access Status -->
+            {% if user %}
+            <div class="feature-status mt-3">
+                <h6>Available Features</h6>
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <small>Chat Access</small>
+                        <i class="bi bi-{{ 'check-circle text-success' if user.can_access_feature('chat') else 'x-circle text-danger' }}"></i>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <small>History Management</small>
+                        <i class="bi bi-{{ 'check-circle text-success' if user.can_access_feature('history_view') else 'x-circle text-danger' }}"></i>
+                    </div>
+                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                        <small>Context Features</small>
+                        <i class="bi bi-{{ 'check-circle text-success' if user.can_access_feature('context_management') else 'x-circle text-danger' }}"></i>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </aside>
+
+        <!-- Chat Area -->
+        <main class="chat-container">
+            <!-- Active Context Display -->
+            <div id="active-context" class="active-context">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <strong><i class="bi bi-paperclip"></i> Active Context</strong>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="clearAllContext()">
+                        <i class="bi bi-x"></i> Clear All
+                    </button>
+                </div>
+                <div id="context-items"></div>
+            </div>
+
+            <!-- Chat Messages -->
+            <div id="chatbox" class="chatbox">
+                <div class="text-center text-muted">
+                    <i class="bi bi-chat-dots fs-1"></i>
+                    <p>Welcome to Gemini Chat! Start a conversation below.</p>
+                    {% if user %}
+                    <p><small>Logged in as {{ user.name }} ({{ user.role }})</small></p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Message Input -->
+            <div class="input-container">
+                <textarea id="message-input" class="message-input" 
+                         placeholder="Type your message here... Use @ to reference files or URLs"
+                         rows="1"></textarea>
+                <button id="send-btn" class="send-button">
+                    <i class="bi bi-send"></i>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Global variables
+        let activeContext = [];
+        let isGenerating = false;
+
+        // Theme management
+        function getStoredTheme() {
+            return localStorage.getItem('theme');
+        }
+
+        function setStoredTheme(theme) {
+            localStorage.setItem('theme', theme);
+        }
+
+        function getPreferredTheme() {
+            const storedTheme = getStoredTheme();
+            if (storedTheme) {
+                return storedTheme;
+            }
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        function setTheme(theme) {
+            if (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-bs-theme', 'dark');
+            } else {
+                document.documentElement.setAttribute('data-bs-theme', theme);
+            }
+            
+            // Update button
+            const themeIcon = document.getElementById('theme-icon');
+            if (theme === 'dark') {
+                themeIcon.className = 'bi bi-sun';
+            } else {
+                themeIcon.className = 'bi bi-moon-stars';
+            }
+        }
+
+        function toggleTheme() {
+            const currentTheme = getStoredTheme() || 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            setStoredTheme(newTheme);
+            setTheme(newTheme);
+        }
+
+        // Initialize theme
+        setTheme(getPreferredTheme());
+
+        // Authentication status check
+        async function checkAuthStatus() {
+            try {
+                const response = await fetch('/auth/status');
+                const data = await response.json();
+                
+                if (!data.authenticated) {
+                    window.location.href = '/auth/login';
+                    return false;
+                }
+                
+                // Update rate limit indicator if needed
+                const rateLimitIndicator = document.querySelector('.rate-limit-indicator');
+                if (rateLimitIndicator && data.user) {
+                    rateLimitIndicator.textContent = `${data.user.request_count}/100 requests`;
+                    rateLimitIndicator.className = `rate-limit-indicator ${data.user.can_make_request ? 'ok' : 'warning'}`;
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('Auth status check failed:', error);
+                return false;
+            }
+        }
+
+        // Chat functionality
+        async function sendMessage() {
+            const messageInput = document.getElementById('message-input');
+            const message = messageInput.value.trim();
+            
+            if (!message || isGenerating) return;
+            
+            // Check authentication
+            if (!(await checkAuthStatus())) return;
+            
+            isGenerating = true;
+            updateSendButton();
+            
+            // Add user message to chat
+            addMessage(message, 'user');
+            messageInput.value = '';
+            
+            // Prepare request data
+            const requestData = {
+                message: message,
+                model: document.getElementById('model-select').value,
+                context: activeContext
+            };
+            
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Request failed');
+                }
+                
+                // Handle streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let botMessageDiv = addMessage('', 'bot');
+                let fullResponse = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                
+                                if (data.error) {
+                                    throw new Error(data.error);
+                                } else if (data.content) {
+                                    fullResponse += data.content;
+                                    updateBotMessage(botMessageDiv, fullResponse);
+                                } else if (data.done) {
+                                    // Clear active context after successful message
+                                    clearAllContext();
+                                    // Refresh history
+                                    loadHistoryDates();
+                                }
+                            } catch (e) {
+                                console.error('Error parsing SSE data:', e);
+                            }
+                        }
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                addMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                isGenerating = false;
+                updateSendButton();
+            }
+        }
+
+        function addMessage(content, type) {
+            const chatbox = document.getElementById('chatbox');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}-message`;
+            
+            if (type === 'user') {
+                messageDiv.innerHTML = `
+                    <div class="message-header">You</div>
+                    <div>${escapeHtml(content)}</div>
+                `;
+            } else if (type === 'bot') {
+                messageDiv.innerHTML = `
+                    <div class="message-header">Gemini AI</div>
+                    <div class="message-content"></div>
+                `;
+            } else if (type === 'error') {
+                messageDiv.className = 'message error-message';
+                messageDiv.innerHTML = `
+                    <div class="message-header">Error</div>
+                    <div>${escapeHtml(content)}</div>
+                `;
+            }
+            
+            chatbox.appendChild(messageDiv);
+            chatbox.scrollTop = chatbox.scrollHeight;
+            
+            return messageDiv;
+        }
+
+        function updateBotMessage(messageDiv, content) {
+            const contentDiv = messageDiv.querySelector('.message-content');
+            if (contentDiv) {
+                // Convert markdown to HTML
+                const htmlContent = marked.parse(content);
+                contentDiv.innerHTML = htmlContent;
+                
+                // Highlight code blocks
+                contentDiv.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+                
+                // Render Mermaid diagrams
+                contentDiv.querySelectorAll('code.language-mermaid').forEach((block) => {
+                    const mermaidDiv = document.createElement('div');
+                    mermaidDiv.className = 'mermaid';
+                    mermaidDiv.textContent = block.textContent;
+                    block.parentNode.replaceWith(mermaidDiv);
+                });
+                
+                // Re-initialize Mermaid
+                mermaid.init();
+            }
+            
+            // Scroll to bottom
+            const chatbox = document.getElementById('chatbox');
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        function updateSendButton() {
+            const sendBtn = document.getElementById('send-btn');
+            sendBtn.disabled = isGenerating;
+            sendBtn.innerHTML = isGenerating ? 
+                '<i class="bi bi-hourglass-split"></i>' : 
+                '<i class="bi bi-send"></i>';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Context management functions
+        function addFileContext() {
+            // Implementation for file context
+            console.log('Add file context');
+        }
+
+        function addUrlContext() {
+            // Implementation for URL context
+            console.log('Add URL context');
+        }
+
+        function summarizeContext() {
+            // Implementation for context summarization
+            console.log('Summarize context');
+        }
+
+        function clearAllContext() {
+            activeContext = [];
+            updateContextDisplay();
+        }
+
+        function updateContextDisplay() {
+            const contextDiv = document.getElementById('active-context');
+            const itemsDiv = document.getElementById('context-items');
+            
+            if (activeContext.length === 0) {
+                contextDiv.classList.remove('show');
+            } else {
+                contextDiv.classList.add('show');
+                itemsDiv.innerHTML = activeContext.map((item, index) => `
+                    <div class="context-item">
+                        <span><i class="bi bi-${item.type === 'file' ? 'file-text' : 'link'}"></i> ${item.name}</span>
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeContext(${index})">
+                            <i class="bi bi-x"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function removeContext(index) {
+            activeContext.splice(index, 1);
+            updateContextDisplay();
+        }
+
+        // History management
+        async function loadHistoryDates() {
+            try {
+                const response = await fetch('/history/dates');
+                const dates = await response.json();
+                
+                const historySelect = document.getElementById('history-select');
+                historySelect.innerHTML = '<option value="all">All History</option>';
+                
+                dates.forEach(date => {
+                    const option = document.createElement('option');
+                    option.value = date;
+                    option.textContent = new Date(date).toLocaleDateString();
+                    historySelect.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Error loading history dates:', error);
+            }
+        }
+
+        // Event listeners
+        document.getElementById('message-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        document.getElementById('send-btn').addEventListener('click', sendMessage);
+
+        document.getElementById('history-select').addEventListener('change', function() {
+            const deleteBtn = document.getElementById('delete-history-btn');
+            deleteBtn.disabled = this.value === 'all';
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAuthStatus();
+            loadHistoryDates();
+            
+            // Auto-resize textarea
+            const textarea = document.getElementById('message-input');
+            textarea.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 200) + 'px';
+            });
+        });
+
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+            const storedTheme = getStoredTheme();
+            if (storedTheme !== 'light' && storedTheme !== 'dark') {
+                setTheme(getPreferredTheme());
+            }
+        });
+    </script>
+</body>
+</html>

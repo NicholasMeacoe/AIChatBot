@@ -7,6 +7,7 @@ Tests core functionality without running the full web server
 import sys
 import os
 import asyncio
+import pytest
 from pathlib import Path
 
 # Add the current directory to Python path
