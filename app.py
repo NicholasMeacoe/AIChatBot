@@ -594,7 +594,7 @@ def chat_endpoint():
     result = cursor.fetchone()
     conn.close()
     system_prompt = result['system_prompt'] if result and result['system_prompt'] else ""
-    model_name = result['model'] if result and result['model'] else MODEL_NAME
+    model_name = result['model'] if result and result['model'] else DEFAULT_MODEL_NAME
 
     # --- Web Search ---
     if user_message.strip().startswith("/search"):
