@@ -1228,3 +1228,10 @@ def clean_interface():
     return render_template('clean_index.html', 
                           available_models=FETCHED_MODELS,
                           default_model=DEFAULT_MODEL_NAME)
+
+@app.route('/minimal')
+def minimal_interface():
+    """Serve the minimal version of the chat interface."""
+    return render_template('minimal.html', 
+                          available_models=FETCHED_MODELS,
+                          default_model=DEFAULT_MODEL_NAME)
