@@ -1193,6 +1193,13 @@ def suggest_path():
     return jsonify(suggestions)
 
 
+@app.route("/test-submission")
+def test_submission():
+    """Serve the test submission interface."""
+    return render_template("test_submission.html", 
+                          available_models=FETCHED_MODELS,
+                          default_model=DEFAULT_MODEL_NAME)
+
 # Additional routes
 @app.route("/clean")
 def clean_interface():

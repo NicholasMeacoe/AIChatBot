@@ -7,108 +7,26 @@
         #chatbox { height: 300px; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; overflow-y: auto; }
         .user-message { background-color: #e1f5fe; padding: 5px; margin: 5px 0; border-radius: 5px; text-align: right; }
         .bot-message { background-color: #f0f0f0; padding: 5px; margin: 5px 0; border-radius: 5px; }
+        .error-message { background-color: #ffebee; color: #c62828; padding: 5px; margin: 5px 0; border-radius: 5px; }
         #input-area { display: flex; }
         #message-input { flex-grow: 1; padding: 5px; margin-right: 5px; }
+        #send-button:disabled { background-color: #ccc; cursor: not-allowed; }
     </style>
 </head>
 <body>
     <h1>Simple Chat Interface</h1>
+    <div>
+        <a href="/test-submission">Test Submission Interface</a> | 
+        <a href="/minimal">Minimal Interface</a> | 
+        <a href="/">Full Interface</a>
+    </div>
     <div id="chatbox"></div>
     <div id="input-area">
         <input type="text" id="message-input" placeholder="Type your message...">
         <button id="send-button">Send</button>
     </div>
 
-    <script>
-        // Simple chat functionality
-        const chatbox = document.getElementById('chatbox');
-        const messageInput = document.getElementById('message-input');
-        const sendButton = document.getElementById('send-button');
-        let conversationId = null;
-
-        // Function to add a message to the chatbox
-        function addMessage(text, type) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = type;
-            messageDiv.textContent = text;
-            chatbox.appendChild(messageDiv);
-            chatbox.scrollTop = chatbox.scrollHeight;
-        }
-
-        // Function to send a message
-        async function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message) return;
-
-            // Add user message to chat
-            addMessage(message, 'user-message');
-            messageInput.value = '';
-
-            try {
-                // Create conversation if needed
-                if (!conversationId) {
-                    const createResponse = await fetch('/api/conversations', { method: 'POST' });
-                    const data = await createResponse.json();
-                    conversationId = data.id;
-                }
-
-                // Send message to server
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: message,
-                        conversation_id: conversationId,
-                        model_name: 'gemini-2.5-flash',
-                        active_context: []
-                    })
-                });
-
-                if (!response.ok) {
-                    throw new Error(`HTTP error ${response.status}`);
-                }
-
-                // Process response
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let botResponse = '';
-
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n\n');
-
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.substring(6));
-                                if (data.text) {
-                                    botResponse += data.text;
-                                }
-                            } catch (e) {
-                                console.error('Error parsing chunk:', e);
-                            }
-                        }
-                    }
-                }
-
-                // Add bot response to chat
-                addMessage(botResponse, 'bot-message');
-            } catch (error) {
-                console.error('Error:', error);
-                addMessage(`Error: ${error.message}`, 'bot-message');
-            }
-        }
-
-        // Event listeners
-        sendButton.addEventListener('click', sendMessage);
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
-    </script>
+    <!-- Load our comprehensive chat submission fix -->
+    <script src="{{ url_for('static', filename='js/chat-submission-fix.js') }}"></script>
 </body>
 </html>
