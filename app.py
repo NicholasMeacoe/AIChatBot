@@ -1213,3 +1213,11 @@ def test_chat():
 def direct_fix():
     """Serve the direct fix instructions page."""
     return render_template('direct_fix.html')
+
+# Import and register conversation routes
+try:
+    from conversation_routes import conversation_bp
+    app.register_blueprint(conversation_bp)
+    print("Registered conversation routes blueprint")
+except ImportError as e:
+    print(f"Could not import conversation routes: {e}")
