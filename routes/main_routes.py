@@ -3,6 +3,7 @@ from flask import (
     jsonify, json
 )
 from datetime import datetime
+import os
 
 # Import shared utilities and config
 import config # Import the config module directly
@@ -211,3 +212,46 @@ def delete_history_endpoint(date_str):
         # Catch unexpected errors during deletion
         print(f"Error in /delete_history endpoint for {date_str}: {e}")
         return jsonify({"error": f"An unexpected error occurred: {str(e)}"}), 500
+
+
+@main_bp.route('/api/commands', methods=['GET'])
+def get_commands():
+    """API endpoint to return a list of available commands for the command palette."""
+    commands = [
+        {"id": "upload_file", "name": "Upload File to Context", "description": "Select a file to add to the chat context."},
+        {"id": "export_chat", "name": "Export Chat History", "description": "Save the current chat session to a file."},
+        {"id": "clear_chat", "name": "Clear Current Chat", "description": "Clears all messages from the screen."},
+        {"id": "search_history", "name": "Search Chat History", "description": "Jump to the history search bar."},
+        {"id": "run_code", "name": "Run Python Code", "description": "Open a modal to execute Python code."},
+        # Add other commands here as features are built out
+    ]
+    return jsonify(commands)
+
+
+@main_bp.route('/api/save_code', methods=['POST'])
+def save_code():
+    """Saves a code snippet to a file in the workspace."""
+    try:
+        data = request.get_json()
+        filename = data.get('filename')
+        content = data.get('content')
+
+        if not filename or not content:
+            return jsonify({"success": False, "error": "Filename and content are required."}), 400
+
+        # Basic security check for filename
+        if ".." in filename or filename.startswith("/"):
+            return jsonify({"success": False, "error": "Invalid filename."}), 400
+
+        workspace_dir = os.path.join(os.getcwd(), 'workspace')
+        if not os.path.exists(workspace_dir):
+            os.makedirs(workspace_dir)
+
+        file_path = os.path.join(workspace_dir, filename)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        return jsonify({"success": True, "path": file_path})
+    except Exception as e:
+        print(f"Error saving code: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500

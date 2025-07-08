@@ -4,6 +4,7 @@ class EnhancedFeatures {
         this.socket = io();
         this.sessionId = this.generateSessionId();
         this.userId = this.generateUserId();
+        this.commands = [];
         this.initializeFeatures();
     }
 
@@ -12,7 +13,7 @@ class EnhancedFeatures {
     }
 
     generateUserId() {
-        return localStorage.getItem('userId') || 
+        return localStorage.getItem('userId') ||
                (() => {
                    const id = 'user_' + Math.random().toString(36).substr(2, 9);
                    localStorage.setItem('userId', id);
@@ -23,11 +24,130 @@ class EnhancedFeatures {
     initializeFeatures() {
         this.initTemplates();
         this.initVoice();
-        this.initCodeExecution();
+        this.initMagicCodeActions(); // Replaces initCodeExecution
         this.initCollaboration();
         this.initAnalytics();
         this.initSmartContext();
+        this.initCommandPalette(); // Add new feature
     }
+
+    // Command Palette
+    initCommandPalette() {
+        this.palette = {
+            modal: document.getElementById('command-palette-modal'),
+            content: document.getElementById('command-palette-content'),
+            input: document.getElementById('command-palette-input'),
+            list: document.getElementById('command-palette-list'),
+        };
+        this.selectedCommandIndex = -1;
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                this.toggleCommandPalette();
+            }
+        });
+
+        this.palette.input.addEventListener('input', () => this.filterCommands());
+        this.palette.input.addEventListener('keydown', (e) => this.handlePaletteNavigation(e));
+        this.palette.modal.addEventListener('click', (e) => {
+            if (e.target === this.palette.modal) {
+                this.toggleCommandPalette(false);
+            }
+        });
+    }
+
+    async toggleCommandPalette(forceShow = null) {
+        const shouldShow = forceShow !== null ? forceShow : this.palette.modal.style.display === 'none';
+        if (shouldShow) {
+            this.palette.modal.style.display = 'block';
+            this.palette.input.focus();
+            if (this.commands.length === 0) {
+                this.commands = await fetch('/api/commands').then(res => res.json());
+            }
+            this.filterCommands();
+        } else {
+            this.palette.modal.style.display = 'none';
+        }
+    }
+
+    filterCommands() {
+        const query = this.palette.input.value.toLowerCase();
+        const filteredCommands = this.commands.filter(cmd =>
+            cmd.name.toLowerCase().includes(query) || cmd.description.toLowerCase().includes(query)
+        );
+        this.renderCommands(filteredCommands);
+    }
+
+    renderCommands(commands) {
+        this.palette.list.innerHTML = '';
+        commands.forEach((cmd, index) => {
+            const li = document.createElement('li');
+            li.className = 'command-item';
+            li.dataset.commandId = cmd.id;
+            li.innerHTML = `
+                <div class="command-item-name">${cmd.name}</div>
+                <div class="command-item-desc">${cmd.description}</div>
+            `;
+            li.addEventListener('click', () => this.executeCommand(cmd.id));
+            this.palette.list.appendChild(li);
+        });
+        this.selectedCommandIndex = -1; // Reset selection
+    }
+
+    handlePaletteNavigation(e) {
+        const items = this.palette.list.querySelectorAll('.command-item');
+        if (items.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            this.selectedCommandIndex = (this.selectedCommandIndex + 1) % items.length;
+            this.updateCommandSelection(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            this.selectedCommandIndex = (this.selectedCommandIndex - 1 + items.length) % items.length;
+            this.updateCommandSelection(items);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (this.selectedCommandIndex > -1) {
+                items[this.selectedCommandIndex].click();
+            }
+        } else if (e.key === 'Escape') {
+            this.toggleCommandPalette(false);
+        }
+    }
+
+    updateCommandSelection(items) {
+        items.forEach((item, index) => {
+            item.classList.toggle('selected', index === this.selectedCommandIndex);
+        });
+    }
+
+    executeCommand(commandId) {
+        console.log(`Executing command: ${commandId}`);
+        switch (commandId) {
+            case 'upload_file':
+                // This assumes a file input with id 'file-upload' exists
+                document.getElementById('image-upload').click();
+                break;
+            case 'export_chat':
+                // Assuming an export function exists
+                alert('Exporting chat... (functionality to be implemented)');
+                break;
+            case 'clear_chat':
+                document.getElementById('chatbox').innerHTML = '<div id="message-anchor"></div>';
+                break;
+            case 'search_history':
+                document.getElementById('search-input').focus();
+                break;
+            case 'run_code':
+                const code = prompt("Enter Python code to execute:");
+                if (code) this.executeCode(code);
+                break;
+        }
+        this.toggleCommandPalette(false); // Close palette after execution
+    }
+
 
     // Template System
     initTemplates() {
@@ -61,8 +181,8 @@ class EnhancedFeatures {
                 transform: translateY(-2px);
                 box-shadow: 0 4px 8px rgba(0,123,255,0.15);
             }
-        </style>` + 
-        Object.entries(templates).map(([id, template]) => 
+        </style>` +
+        Object.entries(templates).map(([id, template]) =>
             `<div class="template-item" onclick="enhancedFeatures.applyTemplate('${id}')">
                 <h6>${template.name}</h6>
                 <small class="text-muted">${template.category}</small>
@@ -73,7 +193,7 @@ class EnhancedFeatures {
     async applyTemplate(templateId) {
         const templates = await fetch('/api/templates').then(r => r.json());
         const template = templates[templateId];
-        
+
         // Create default values for all variables
         const variables = {};
         if (template.variables) {
@@ -81,13 +201,13 @@ class EnhancedFeatures {
                 variables[variable] = `[${variable}]`; // Placeholder values
             });
         }
-        
+
         const result = await fetch(`/api/templates/${templateId}/apply`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(variables)
         }).then(r => r.json());
-        
+
         document.getElementById('message-input').value = result.result;
         this.closeModal();
     }
@@ -113,12 +233,12 @@ class EnhancedFeatures {
                 const blob = new Blob(chunks, { type: 'audio/wav' });
                 const formData = new FormData();
                 formData.append('audio', blob);
-                
+
                 const result = await fetch('/api/voice/speech-to-text', {
                     method: 'POST',
                     body: formData
                 }).then(r => r.json());
-                
+
                 if (result.success) {
                     document.getElementById('message-input').value = result.text;
                 }
@@ -131,41 +251,103 @@ class EnhancedFeatures {
         }
     }
 
-    // Code Execution
-    initCodeExecution() {
-        this.addMessageProcessor(this.processCodeBlocks.bind(this));
-    }
-
-    processCodeBlocks(messageElement) {
-        const codeBlocks = messageElement.querySelectorAll('pre code');
-        codeBlocks.forEach(block => {
-            const executeBtn = document.createElement('button');
-            executeBtn.innerHTML = '▶️ Run';
-            executeBtn.className = 'btn btn-sm btn-success mt-2';
-            executeBtn.onclick = () => this.executeCode(block.textContent);
-            block.parentElement.appendChild(executeBtn);
+    // Magic Code Actions (replaces Code Execution)
+    initMagicCodeActions() {
+        const chatbox = document.getElementById('chatbox');
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach(mutation => {
+                mutation.addedNodes.forEach(node => {
+                    if (node.nodeType === 1 && node.matches('.bot-message')) {
+                        const codeBlocks = node.querySelectorAll('pre');
+                        codeBlocks.forEach(pre => this.addCodeActionButtons(pre));
+                    }
+                });
+            });
         });
+
+        observer.observe(chatbox, { childList: true, subtree: true });
     }
 
-    async executeCode(code) {
+    addCodeActionButtons(preElement) {
+        if (preElement.querySelector('.code-actions')) return; // Already has buttons
+
+        const codeText = preElement.querySelector('code').innerText;
+
+        const actionsContainer = document.createElement('div');
+        actionsContainer.className = 'code-actions d-flex justify-content-end gap-2 p-2';
+        actionsContainer.style.position = 'absolute';
+        actionsContainer.style.top = '5px';
+        actionsContainer.style.right = '5px';
+
+        // Copy Button
+        const copyBtn = document.createElement('button');
+        copyBtn.innerText = 'Copy';
+        copyBtn.className = 'btn btn-sm btn-secondary';
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(codeText).then(() => {
+                copyBtn.innerText = 'Copied!';
+                setTimeout(() => copyBtn.innerText = 'Copy', 2000);
+            });
+        };
+
+        // Save Button
+        const saveBtn = document.createElement('button');
+        saveBtn.innerText = 'Save';
+        saveBtn.className = 'btn btn-sm btn-secondary';
+        saveBtn.onclick = () => this.saveCodeToFile(codeText);
+
+
+        // Run Button
+        const runBtn = document.createElement('button');
+        runBtn.innerText = 'Run';
+        runBtn.className = 'btn btn-sm btn-primary';
+        runBtn.onclick = () => this.executeCode(codeText, preElement);
+
+        actionsContainer.append(copyBtn, saveBtn, runBtn);
+        preElement.style.position = 'relative'; // Needed for absolute positioning of children
+        preElement.appendChild(actionsContainer);
+    }
+
+    async saveCodeToFile(code) {
+        const fileName = prompt("Enter filename (e.g., script.py):", "script.py");
+        if (!fileName) return;
+
+        const response = await fetch('/api/save_code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: fileName, content: code })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            alert(`File saved successfully at ${result.path}`);
+        } else {
+            alert(`Error: ${result.error}`);
+        }
+    }
+
+    async executeCode(code, preElement) {
+        // Remove previous results if any
+        const oldResult = preElement.parentElement.querySelector('.code-result');
+        if (oldResult) oldResult.remove();
+
         const result = await fetch('/api/execute', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({code, language: 'python'})
         }).then(r => r.json());
-        
-        this.showExecutionResult(result);
+
+        this.showExecutionResult(result, preElement);
     }
 
-    showExecutionResult(result) {
+    showExecutionResult(result, preElement) {
         const resultDiv = document.createElement('div');
         resultDiv.className = 'code-result alert alert-info mt-2';
-        resultDiv.innerHTML = `
-            <strong>Output:</strong><br>
-            <pre>${result.stdout || result.error || 'No output'}</pre>
-        `;
-        document.getElementById('chatbox').appendChild(resultDiv);
+        const output = result.stdout || result.stderr || 'No output';
+        resultDiv.innerHTML = `<strong>Output:</strong><pre class="mb-0">${output}</pre>`;
+        preElement.insertAdjacentElement('afterend', resultDiv);
     }
+
 
     // Collaboration
     initCollaboration() {
@@ -181,7 +363,7 @@ class EnhancedFeatures {
 
     updateUserList(users) {
         const userList = document.getElementById('user-list') || this.createUserList();
-        userList.innerHTML = Object.values(users).map(user => 
+        userList.innerHTML = Object.values(users).map(user =>
             `<span class="badge bg-primary me-1">${user.username}</span>`
         ).join('');
     }
@@ -201,11 +383,11 @@ class EnhancedFeatures {
         analyticsBtn.className = 'btn btn-outline-info btn-sm';
         analyticsBtn.title = 'Analytics';
         analyticsBtn.onclick = () => this.showAnalytics();
-        
+
         // Find the button group container and insert the analytics button after the send button
         const buttonGroup = document.querySelector('#input-area .d-flex.gap-1');
         const sendButton = document.getElementById('send-button');
-        
+
         if (buttonGroup && sendButton) {
             // Insert analytics button after the send button
             const nextSibling = sendButton.nextElementSibling;
@@ -277,8 +459,8 @@ class EnhancedFeatures {
         suggestionDiv.className = 'alert alert-info mt-2';
         suggestionDiv.innerHTML = `
             <strong>Suggested Context:</strong><br>
-            ${suggestions.slice(0,3).map(s => 
-                `<button class="btn btn-sm btn-outline-primary me-1" 
+            ${suggestions.slice(0,3).map(s =>
+                `<button class="btn btn-sm btn-outline-primary me-1"
                  onclick="enhancedFeatures.addSuggestedContext('${s.path}')">${s.path}</button>`
             ).join('')}
         `;
@@ -313,15 +495,6 @@ class EnhancedFeatures {
 
     closeModal() {
         document.querySelector('.modal')?.remove();
-    }
-
-    addMessageProcessor(processor) {
-        const originalAddMessage = window.addMessage;
-        window.addMessage = function(...args) {
-            const result = originalAddMessage.apply(this, args);
-            processor(result);
-            return result;
-        };
     }
 
     addInputProcessor(processor) {
