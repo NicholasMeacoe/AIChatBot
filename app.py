@@ -1193,6 +1193,31 @@ def suggest_path():
     return jsonify(suggestions)
 
 
+# Additional routes
+@app.route("/clean")
+def clean_interface():
+    """Serve the clean version of the chat interface."""
+    return render_template("clean_index.html", 
+                          available_models=FETCHED_MODELS,
+                          default_model=DEFAULT_MODEL_NAME)
+
+@app.route("/minimal")
+def minimal_interface():
+    """Serve the minimal version of the chat interface."""
+    return render_template("minimal.html", 
+                          available_models=FETCHED_MODELS,
+                          default_model=DEFAULT_MODEL_NAME)
+
+@app.route("/simple")
+def simple_interface():
+    """Serve the simple version of the chat interface."""
+    return render_template("simple.html")
+
+@app.route("/test-route")
+def test_simple_route():
+    """A simple test route."""
+    return "Test route is working!"
+
 if __name__ == '__main__':
     # Make sure .env is in the same directory or GOOGLE_API_KEY is set globally
     print("Starting Enhanced Gemini Chat Server...")
@@ -1235,3 +1260,13 @@ def minimal_interface():
     return render_template('minimal.html', 
                           available_models=FETCHED_MODELS,
                           default_model=DEFAULT_MODEL_NAME)
+
+@app.route('/test')
+def test_route():
+    """A simple test route."""
+    return "Test route is working!"
+
+@app.route('/simple')
+def simple_interface():
+    """Serve the simple version of the chat interface."""
+    return render_template('simple.html')
