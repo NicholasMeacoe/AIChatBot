@@ -1202,3 +1202,14 @@ if __name__ == '__main__':
     # Use debug=True for development, but turn off in production
     # Use host='0.0.0.0' to make it accessible on the network
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+
+# Test route for debugging the chat interface
+@app.route('/test_chat')
+def test_chat():
+    """Serve a simple test chat interface for debugging."""
+    return render_template('test_chat.html')
+
+@app.route('/direct_fix')
+def direct_fix():
+    """Serve the direct fix instructions page."""
+    return render_template('direct_fix.html')
