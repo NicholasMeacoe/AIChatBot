@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        /* Include all the original styles here */
+        /* This is a placeholder - copy all styles from the original index.html */
+        :root {
+            --bg-color: #f8f9fa;
+            --chatbox-bg: #ffffff;
+            --border-color: #dee2e6;
+            --text-color: #212529;
+            --secondary-text: #6c757d;
+            --user-msg-bg: linear-gradient(135deg, #007bff, #0056b3);
+            --bot-msg-bg: #e9ecef;
+            --bot-msg-text: #343a40;
+            --error-bg: #f8d7da;
+            --error-text: #721c24;
+            --error-border: #f5c6cb;
+            --warning-bg: #fff3cd;
+            --warning-text: #856404;
+            --warning-border: #ffeeba;
+            --button-bg: #007bff;
+            --button-hover-bg: #0056b3;
+            --button-disabled-bg: #ced4da;
+            --input-border: #ced4da;
+            --font-family: 'Inter', sans-serif;
+        }
+        body { font-family: sans-serif; margin: 0; background-color: #f4f4f4; display: flex; height: 100vh; }
+        #sidebar { width: 280px; background: linear-gradient(180deg, #1e293b 0%, #334155 100%); padding: 24px; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1); }
+        #sidebar h2 { margin: 0 0 20px 0; color: #ffffff; font-size: 1.25rem; font-weight: 600; }
+        #new-chat-button { margin-bottom: 16px; padding: 12px 16px; border: 2px solid #2563eb; border-radius: 8px; cursor: pointer; background: #2563eb; color: #ffffff; font-weight: 500; transition: all 0.2s ease; font-size: 14px; }
+        #new-chat-button:hover { background: #1d4ed8; border-color: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        #conversation-list { list-style: none; padding: 0; margin: 0; }
+        #conversation-list li { padding: 12px 16px; margin: 4px 0; cursor: pointer; border-radius: 8px; background: rgba(255, 255, 255, 0.15); color: #ffffff; border: 1px solid rgba(255, 255, 255, 0.2); transition: all 0.2s ease; font-size: 14px; font-weight: 500; }
+        #conversation-list li:hover { background: rgba(255, 255, 255, 0.25); border-color: rgba(255, 255, 255, 0.4); transform: translateX(4px); }
+        #conversation-list li.active { background: #2563eb; border-color: #2563eb; color: #ffffff; font-weight: 600; }
+        #system-prompt-area { display: flex; margin-bottom: 10px; }
+        #system-prompt-input { flex-grow: 1; height: 40px; padding: 8px; border: 1px solid #ccc; border-radius: 3px; }
+        #save-system-prompt { margin-left: 10px; padding: 10px 15px; background-color: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        #model-select { margin-left: 10px; padding: 10px; border-radius: 3px; border: 1px solid #ccc; }
+        #main-content { flex-grow: 1; display: flex; flex-direction: column; padding: 20px; height: 100%; box-sizing: border-box; }
+        #chatbox { flex-grow: 1; overflow-y: scroll; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; background-color: #fff; }
+        .message { margin-bottom: 10px; padding: 8px; border-radius: 5px; }
+        .user-message { background-color: #e1f5fe; text-align: right; margin-left: 40px; }
+        .bot-message { background-color: #f0f0f0; margin-right: 40px; }
+        .bot-message pre { background-color: #eee; padding: 10px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word; }
+        .error-message { background-color: #ffebee; color: #c62828; border: 1px solid #c62828; padding: 8px; margin-right: 40px;}
+        .context-warning { background-color: #fff9c4; color: #795548; border: 1px solid #fbc02d; font-size: 0.9em; margin-top: -5px; margin-bottom: 5px; padding: 5px; margin-right: 40px;}
+        #input-area { display: flex; gap: 12px; align-items: center; position: relative; z-index: 10; margin: 20px; padding: 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        #input-area .d-flex.gap-1 { flex-shrink: 0; min-width: fit-content; }
+        #input-area button { flex-shrink: 0; }
+        #message-input { flex-grow: 1; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #f8fafc; color: #0f172a; transition: all 0.2s ease; }
+        #message-input { flex-grow: 1; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #f8fafc; color: #0f172a; transition: all 0.2s ease; }
+        #message-input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background: #ffffff; }
+        #send-button { width: 48px; height: 48px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); flex-shrink: 0; }
+        #send-button:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        #send-button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .timestamp { font-size: 0.7em; color: #888; display: block; margin-top: 3px; }
+        #thinking { margin-left: 5px; display: none; font-style: italic; color: #555 } /* Initially hidden */
+
+        #theme-switcher { position: absolute; top: 10px; right: 20px; }
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; }
+        input:checked + .slider { background-color: #2196F3; }
+        input:focus + .slider { box-shadow: 0 0 1px #2196F3; }
+        input:checked + .slider:before { transform: translateX(26px); }
+        .slider.round { border-radius: 34px; }
+        .slider.round:before { border-radius: 50%; }
+
+        body.dark-mode { background-color: #121212; color: #e0e0e0; }
+        body.dark-mode #chatbox { background-color: #1e1e1e; border-color: #444; }
+        body.dark-mode .user-message { background-color: #0d47a1; color: #e3f2fd; }
+        body.dark-mode .bot-message { background-color: #333; }
+        body.dark-mode .bot-message pre { background-color: #2c2c2c; color: #f0f0f0; }
+        .bot-message pre { position: relative; }
+        .copy-button { position: absolute; top: 5px; right: 5px; background-color: #888; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer; font-size: 0.8em; opacity: 0.5; }
+        .copy-button:hover { opacity: 1; }
+        .delete-button { background: none; border: none; color: #aaa; cursor: pointer; font-size: 1.2em; float: left; margin-right: 5px; opacity: 0.5; }
+        .delete-button:hover { color: #f00; opacity: 1; }
+        body.dark-mode #message-input { background-color: #333; border-color: #555; color: #e0e0e0; }
+        body.dark-mode #send-button { background-color: #0d47a1; }
+        body.dark-mode .context-warning { background-color: #4e4d2e; color: #fff9c4; border-color: #a48c1a; }
+        body.dark-mode .error-message { background-color: #5c1c1c; color: #ffebee; border-color: #a94442; }
+        body.dark-mode #thinking { color: #aaa; }
+        /* Context Menu - Use Bootstrap dropdown styles */
+        #context-menu {
+            position: absolute;
+            z-index: 1000;
+            display: none;
+            min-width: 200px;
+            max-width: 300px;
+        }
+        .context-menu-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .context-menu-item .icon {
+            margin-left: 10px;
+            font-weight: bold;
+            color: #007bff;
+            transition: transform 0.2s ease-in-out;
+        }
+         .context-menu-item .icon.expanded {
+            transform: rotate(45deg);
+        }
+        .context-submenu {
+            display: none;
+            padding-left: 15px;
+            border-left: 2px solid #dee2e6;
+            margin-left: 10px;
+        }
+        .context-submenu.show {
+            display: block;
+        }
+        .context-submenu-item {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #e2e8f0;
+            background: #ffffff;
+            color: #0f172a;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 3px;
+            margin: 2px 0;
+            border: 1px solid #e2e8f0;
+        }
+        .context-submenu-item:hover {
+            background: #2563eb;
+            color: #ffffff;
+        }
+        
+        /* Additional CSS fixes for rendering issues */
+        .message-content {
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+        
+        .message-content pre {
+            max-width: 100%;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        
+        .message-content code {
+            white-space: pre-wrap;
+        }
+        
+        .message-content img {
+            max-width: 100%;
+            height: auto;
+        }
+        
+        .message-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        
+        .message-content th, .message-content td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        .message-content blockquote {
+            border-left: 4px solid #ddd;
+            padding-left: 10px;
+            margin-left: 0;
+            color: #666;
+        }
+        
+        /* Fix for conversation list items */
+        #conversation-list li {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .delete-conversation-btn {
+            background: none;
+            border: none;
+            color: #ff6b6b;
+            font-size: 16px;
+            cursor: pointer;
+            margin-left: 8px;
+            opacity: 0.5;
+        }
+        
+        .delete-conversation-btn:hover {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h2>Conversations</h2>
+        <button id="new-chat-button">+ New Chat</button>
+        <ul id="conversation-list">
+        </ul>
+    </div>
+    <div id="main-content">
+        <div id="theme-switcher">
+            <label class="switch">
+                <input type="checkbox" id="theme-toggle">
+                <span class="slider round"></span>
+            </label>
+        </div>
+        <h1>Gemini Chat Interface</h1>
+        <div id="system-prompt-area">
+            <textarea id="system-prompt-input" placeholder="Enter a system prompt for this conversation..."></textarea>
+            <button id="save-system-prompt">Save</button>
+            <select id="model-select">
+                {% for model_name in available_models %}
+                    {% set display_name = model_name.split('/')[-1] %}
+                    <option value="{{ model_name }}" {% if model_name == default_model %}selected{% endif %}>
+                        {{ display_name }}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- History Management Section -->
+        <div id="history-management" class="d-flex gap-2 align-items-center mb-3 p-2 border rounded">
+            <label for="history-date-select" class="form-label mb-0">History:</label>
+            <select id="history-date-select" class="form-select form-select-sm" style="width: auto;">
+                <option value="">All History</option>
+            </select>
+            <button id="delete-history-btn" class="btn btn-outline-danger btn-sm" disabled>Delete Selected Date</button>
+            <button id="refresh-history-btn" class="btn btn-outline-secondary btn-sm">Refresh</button>
+        </div>
+        
+        <input type="text" id="search-input" placeholder="Search history..." style="width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 3px; border: 1px solid #ccc;">
+        <div id="chatbox">
+            <div id="message-anchor"></div>
+        </div>
+        <div id="input-area" class="d-flex gap-2 p-2 border rounded shadow-sm align-items-center">
+            <input type="text" id="message-input" class="form-control" placeholder="Type your message (use @ {path} for context)..." autocomplete="off">
+            <div class="d-flex gap-1 align-items-center flex-shrink-0">
+                <button id="send-button" class="btn btn-primary rounded-circle p-0 d-flex align-items-center justify-content-center" title="Send Message" style="width: 40px; height: 40px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-send-fill" viewBox="0 0 16 16">
+                        <path d="m12.14 8.753-5.482 2.217c-.566.23-1.164-.043-1.164-.696V8.284l-1.63.853c-.534.28-1.174-.043-1.174-.696V5.934c0-.653.64-.976 1.174-.696L6.506 6.091V4.102c0-.653.598-.926 1.164-.696L12.14 5.623c.566.23.566 1.277 0 1.507L8.93 8.188a.5.5 0 0 1-.48-.033L7.506 7.5a.5.5 0 0 1 .48-.967l.944.454 2.21-.895z"/>
+                    </svg>
+                </button>
+                <input type="file" id="image-upload" accept="image/*" style="display: none;">
+                <button id="image-upload-button" class="btn btn-outline-success btn-sm" title="Upload Image">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-image" viewBox="0 0 16 16">
+                      <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+                      <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                    </svg>
+                </button>
+            </div>
+            <button id="stop-button" class="btn btn-outline-danger btn-sm" style="display: none;">Stop</button>
+            <span id="thinking" class="text-muted small" style="display: none;">Thinking...</span>
+        </div>
+
+        <!-- Image to PDF Conversion Area -->
+        <div id="pdf-conversion-area" class="mt-3 p-3 border rounded shadow-sm d-flex flex-column gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <label for="image-input" class="form-label mb-0">Convert JPEGs to PDF:</label>
+                <input type="file" id="image-input" class="form-control form-control-sm flex-grow-1" accept=".jpeg,.jpg" multiple>
+                <button id="convert-button" class="btn btn-sm btn-success">Convert & Download</button>
+            </div>
+            <div class="form-check">
+                 <input class="form-check-input" type="checkbox" id="ocr-checkbox" name="ocr">
+                 <label class="form-check-label text-muted small" for="ocr-checkbox">Make text selectable (OCR)? (Requires Tesseract)</label>
+            </div>
+            <span id="conversion-status" class="text-muted small" style="min-height: 1.2em;"></span>
+        </div>
+        <!-- End Image to PDF Conversion Area -->
+
+        <!-- Context Menu -->
+        <div id="context-menu" class="dropdown-menu shadow">
+            <div class="context-menu-item dropdown-item" data-type="files">
+                <span>Files</span>
+                <span class="icon">+</span>
+            </div>
+            <div class="context-submenu" id="files-submenu"></div>
+            <div class="context-menu-item dropdown-item" data-type="folders">
+                <span>Folders</span>
+                <span class="icon">+</span>
+            </div>
+            <div class="context-submenu" id="folders-submenu"></div>
+            <div class="context-menu-item dropdown-item" data-type="url">
+                <span>Url</span>
+                <span class="icon">+</span>
+            </div>
+            <div class="context-submenu" id="url-submenu">
+                <input type="text" id="url-input" placeholder="Enter URL (http:// or https://)" class="form-control form-control-sm mt-2">
+                <button id="add-url-button" class="btn btn-sm btn-primary mt-1">Add</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Load essential scripts -->
+    <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/core-fix.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/rendering-fix.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/conversation-manager.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/history-fix.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.5/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Initialize basic functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Theme toggle
+            const themeToggle = document.getElementById('theme-toggle');
+            const body = document.body;
+            
+            themeToggle.addEventListener('change', () => {
+                if (themeToggle.checked) {
+                    body.classList.add('dark-mode');
+                    localStorage.setItem('theme', 'dark-mode');
+                } else {
+                    body.classList.remove('dark-mode');
+                    localStorage.setItem('theme', 'light-mode');
+                }
+            });
+            
+            // Load saved theme
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark-mode') {
+                body.classList.add('dark-mode');
+                themeToggle.checked = true;
+            }
+            
+            // Initialize activeContextItems if needed
+            if (typeof window.activeContextItems === 'undefined') {
+                window.activeContextItems = [];
+            }
+        });
+    </script>
+</body>
+</html>

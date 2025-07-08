@@ -1221,3 +1221,10 @@ try:
     print("Registered conversation routes blueprint")
 except ImportError as e:
     print(f"Could not import conversation routes: {e}")
+
+@app.route('/clean')
+def clean_interface():
+    """Serve the clean version of the chat interface."""
+    return render_template('clean_index.html', 
+                          available_models=FETCHED_MODELS,
+                          default_model=DEFAULT_MODEL_NAME)
