@@ -1193,13 +1193,6 @@ def suggest_path():
     return jsonify(suggestions)
 
 
-@app.route("/test-submission")
-def test_submission():
-    """Serve the test submission interface."""
-    return render_template("test_submission.html", 
-                          available_models=FETCHED_MODELS,
-                          default_model=DEFAULT_MODEL_NAME)
-
 # Additional routes
 @app.route("/clean")
 def clean_interface():
@@ -1220,15 +1213,17 @@ def simple_interface():
     """Serve the simple version of the chat interface."""
     return render_template("simple.html")
 
-@app.route("/test-route")
-def test_simple_route():
-    """A simple test route."""
-    return "Test route is working!"
-
 if __name__ == '__main__':
     # Make sure .env is in the same directory or GOOGLE_API_KEY is set globally
     print("Starting Enhanced Gemini Chat Server...")
     print("Ensure GOOGLE_API_KEY is set in a .env file or environment variables.")
+@app.route("/test-submission")
+def test_submission():
+    """Serve the test submission interface."""
+    return render_template("test_submission.html", 
+                          available_models=FETCHED_MODELS,
+                          default_model=DEFAULT_MODEL_NAME)
+
     print(f"Database file: {os.path.abspath(DB_NAME)}")
     print("Enhanced features available at /api/ endpoints")
     # Use debug=True for development, but turn off in production
@@ -1236,11 +1231,6 @@ if __name__ == '__main__':
     socketio.run(app, debug=True, host='0.0.0.0', port=5000)
 
 # Test route for debugging the chat interface
-@app.route('/test_chat')
-def test_chat():
-    """Serve a simple test chat interface for debugging."""
-    return render_template('test_chat.html')
-
 @app.route('/direct_fix')
 def direct_fix():
     """Serve the direct fix instructions page."""
@@ -1254,26 +1244,3 @@ try:
 except ImportError as e:
     print(f"Could not import conversation routes: {e}")
 
-@app.route('/clean')
-def clean_interface():
-    """Serve the clean version of the chat interface."""
-    return render_template('clean_index.html', 
-                          available_models=FETCHED_MODELS,
-                          default_model=DEFAULT_MODEL_NAME)
-
-@app.route('/minimal')
-def minimal_interface():
-    """Serve the minimal version of the chat interface."""
-    return render_template('minimal.html', 
-                          available_models=FETCHED_MODELS,
-                          default_model=DEFAULT_MODEL_NAME)
-
-@app.route('/test')
-def test_route():
-    """A simple test route."""
-    return "Test route is working!"
-
-@app.route('/simple')
-def simple_interface():
-    """Serve the simple version of the chat interface."""
-    return render_template('simple.html')
