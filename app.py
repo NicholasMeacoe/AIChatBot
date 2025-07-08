@@ -1213,10 +1213,6 @@ def simple_interface():
     """Serve the simple version of the chat interface."""
     return render_template("simple.html")
 
-if __name__ == '__main__':
-    # Make sure .env is in the same directory or GOOGLE_API_KEY is set globally
-    print("Starting Enhanced Gemini Chat Server...")
-    print("Ensure GOOGLE_API_KEY is set in a .env file or environment variables.")
 @app.route("/test-submission")
 def test_submission():
     """Serve the test submission interface."""
@@ -1224,17 +1220,11 @@ def test_submission():
                           available_models=FETCHED_MODELS,
                           default_model=DEFAULT_MODEL_NAME)
 
-    print(f"Database file: {os.path.abspath(DB_NAME)}")
-    print("Enhanced features available at /api/ endpoints")
-    # Use debug=True for development, but turn off in production
-    # Use host='0.0.0.0' to make it accessible on the network
-    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
-
 # Test route for debugging the chat interface
-@app.route('/direct_fix')
+@app.route("/direct_fix")
 def direct_fix():
     """Serve the direct fix instructions page."""
-    return render_template('direct_fix.html')
+    return render_template("direct_fix.html")
 
 # Import and register conversation routes
 try:
@@ -1242,5 +1232,24 @@ try:
     app.register_blueprint(conversation_bp)
     print("Registered conversation routes blueprint")
 except ImportError as e:
+    print(f"Could not import conversation routes: {e}")
+
+if __name__ == '__main__':
+    # Make sure .env is in the same directory or GOOGLE_API_KEY is set globally
+    print("Starting Enhanced Gemini Chat Server...")
+    print("Ensure GOOGLE_API_KEY is set in a .env file or environment variables.")
+    print(f"Database file: {os.path.abspath(DB_NAME)}")
+    print("Enhanced features available at /api/ endpoints")
+    # Use debug=True for development, but turn off in production
+    # Use host='0.0.0.0' to make it accessible on the network
+    socketio.run(app, debug=True, host='0.0.0.0', port=5000)
+
+
+
+
+
+
+
+
     print(f"Could not import conversation routes: {e}")
 
