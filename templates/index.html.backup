@@ -56,9 +56,6 @@
         .error-message { background-color: #ffebee; color: #c62828; border: 1px solid #c62828; padding: 8px; margin-right: 40px;}
         .context-warning { background-color: #fff9c4; color: #795548; border: 1px solid #fbc02d; font-size: 0.9em; margin-top: -5px; margin-bottom: 5px; padding: 5px; margin-right: 40px;}
         #input-area { display: flex; gap: 12px; align-items: center; position: relative; z-index: 10; margin: 20px; padding: 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
-        #input-area .d-flex.gap-1 { flex-shrink: 0; min-width: fit-content; }
-        #input-area button { flex-shrink: 0; }
-        #message-input { flex-grow: 1; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #f8fafc; color: #0f172a; transition: all 0.2s ease; }
         #message-input { flex-grow: 1; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; background: #f8fafc; color: #0f172a; transition: all 0.2s ease; }
         #message-input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background: #ffffff; }
         #send-button { width: 48px; height: 48px; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s ease; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); flex-shrink: 0; }
@@ -172,39 +169,26 @@
 
             </select>
         </div>
-        
-        <!-- History Management Section -->
-        <div id="history-management" class="d-flex gap-2 align-items-center mb-3 p-2 border rounded">
-            <label for="history-date-select" class="form-label mb-0">History:</label>
-            <select id="history-date-select" class="form-select form-select-sm" style="width: auto;">
-                <option value="">All History</option>
-            </select>
-            <button id="delete-history-btn" class="btn btn-outline-danger btn-sm" disabled>Delete Selected Date</button>
-            <button id="refresh-history-btn" class="btn btn-outline-secondary btn-sm">Refresh</button>
-        </div>
-        
         <input type="text" id="search-input" placeholder="Search history..." style="width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 3px; border: 1px solid #ccc;">
         <div id="chatbox">
             <div id="message-anchor"></div>
         </div>
-        <div id="input-area" class="d-flex gap-2 p-2 border rounded shadow-sm align-items-center">
+        <div id="input-area" class="d-flex gap-2 p-2 border rounded shadow-sm">
             <input type="text" id="message-input" class="form-control" placeholder="Type your message (use @ {path} for context)..." autocomplete="off">
-            <div class="d-flex gap-1 align-items-center flex-shrink-0">
-                <button id="send-button" class="btn btn-primary rounded-circle p-0 d-flex align-items-center justify-content-center" title="Send Message" style="width: 40px; height: 40px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="bi bi-send-fill" viewBox="0 0 16 16">
-                        <path d="m12.14 8.753-5.482 2.217c-.566.23-1.164-.043-1.164-.696V8.284l-1.63.853c-.534.28-1.174-.043-1.174-.696V5.934c0-.653.64-.976 1.174-.696L6.506 6.091V4.102c0-.653.598-.926 1.164-.696L12.14 5.623c.566.23.566 1.277 0 1.507L8.93 8.188a.5.5 0 0 1-.48-.033L7.506 7.5a.5.5 0 0 1 .48-.967l.944.454 2.21-.895z"/>
-                    </svg>
-                </button>
-                <input type="file" id="image-upload" accept="image/*" style="display: none;">
-                <button id="image-upload-button" class="btn btn-outline-success btn-sm" title="Upload Image">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-image" viewBox="0 0 16 16">
-                      <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
-                      <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
-                    </svg>
-                </button>
-            </div>
-            <button id="stop-button" class="btn btn-outline-danger btn-sm" style="display: none;">Stop</button>
-            <span id="thinking" class="text-muted small" style="display: none;">Thinking...</span>
+            <button id="send-button" class="btn btn-primary btn-lg rounded-circle p-0 d-flex align-items-center justify-content-center" title="Send Message" style="width: 44px; height: 44px;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="bi bi-send-fill" viewBox="0 0 16 16">
+                    <path d="m12.14 8.753-5.482 2.217c-.566.23-1.164-.043-1.164-.696V8.284l-1.63.853c-.534.28-1.174-.043-1.174-.696V5.934c0-.653.64-.976 1.174-.696L6.506 6.091V4.102c0-.653.598-.926 1.164-.696L12.14 5.623c.566.23.566 1.277 0 1.507L8.93 8.188a.5.5 0 0 1-.48-.033L7.506 7.5a.5.5 0 0 1 .48-.967l.944.454 2.21-.895z"/>
+                </svg>
+            </button>
+            <input type="file" id="image-upload" accept="image/*" style="display: none;">
+            <button id="image-upload-button" class="btn btn-outline-success btn-sm ms-2" title="Upload Image">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-image" viewBox="0 0 16 16">
+                  <path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+                  <path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/>
+                </svg>
+            </button>
+            <button id="stop-button" style="display: none;">Stop</button>
+            <span id="thinking">Thinking...</span>
         </div>
 
         <!-- Image to PDF Conversion Area -->
@@ -320,7 +304,7 @@
             const conversations = await convoDetailsResponse.json();
             const currentConvo = conversations.find(c => c.id === id);
             systemPromptInput.value = currentConvo.system_prompt || '';
-            modelSelect.value = currentConvo.model || 'gemini-2.5-flash';
+            modelSelect.value = currentConvo.model || 'gemini-1.5-flash';
 
             messageAnchor.scrollIntoView();
         }
@@ -602,118 +586,6 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             loadConversations();
-        });
-
-        // --- History Management Functions ---
-        const historyDateSelect = document.getElementById('history-date-select');
-        const deleteHistoryBtn = document.getElementById('delete-history-btn');
-        const refreshHistoryBtn = document.getElementById('refresh-history-btn');
-
-        // Load available history dates
-        async function loadHistoryDates() {
-            try {
-                const response = await fetch('/fetch_history');
-                const data = await response.json();
-                const dates = new Set();
-                
-                data.history.forEach(item => {
-                    const date = new Date(item.timestamp).toISOString().split('T')[0];
-                    dates.add(date);
-                });
-                
-                // Clear existing options except "All History"
-                historyDateSelect.innerHTML = '<option value="">All History</option>';
-                
-                // Add date options (sorted newest first)
-                Array.from(dates).sort().reverse().forEach(date => {
-                    const option = document.createElement('option');
-                    option.value = date;
-                    option.textContent = new Date(date).toLocaleDateString();
-                    historyDateSelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading history dates:', error);
-            }
-        }
-
-        // Load and display history for selected date
-        async function loadHistoryForDate(selectedDate = '') {
-            try {
-                const url = selectedDate ? `/fetch_history?date=${selectedDate}` : '/fetch_history';
-                const response = await fetch(url);
-                const data = await response.json();
-                
-                // Clear current chat display
-                chatbox.innerHTML = '<div id="message-anchor"></div>';
-                
-                // Display history
-                data.history.forEach(item => {
-                    const userMsgDiv = addMessage(item.user_message, 'user-message', item.timestamp);
-                    const botMsgDiv = addMessage('', 'bot-message', item.timestamp);
-                    const contentDiv = botMsgDiv.querySelector('.message-content');
-                    contentDiv.innerHTML = item.bot_response;
-                    addCopyButtons(contentDiv);
-                });
-                
-                messageAnchor.scrollIntoView();
-            } catch (error) {
-                console.error('Error loading history:', error);
-                addMessage('Error loading history: ' + error.message, 'error-message', new Date());
-            }
-        }
-
-        // Delete history for selected date
-        async function deleteHistoryForDate(dateStr) {
-            if (!confirm(`Are you sure you want to delete all history for ${new Date(dateStr).toLocaleDateString()}?`)) {
-                return;
-            }
-            
-            try {
-                const response = await fetch(`/delete_history/${dateStr}`, {
-                    method: 'DELETE'
-                });
-                const result = await response.json();
-                
-                if (result.success) {
-                    alert(`Successfully deleted ${result.deleted_count} entries for ${new Date(dateStr).toLocaleDateString()}`);
-                    // Refresh the date dropdown and clear display
-                    await loadHistoryDates();
-                    historyDateSelect.value = '';
-                    deleteHistoryBtn.disabled = true;
-                    chatbox.innerHTML = '<div id="message-anchor"></div>';
-                } else {
-                    alert('Error deleting history: ' + result.error);
-                }
-            } catch (error) {
-                console.error('Error deleting history:', error);
-                alert('Error deleting history: ' + error.message);
-            }
-        }
-
-        // Event listeners for history management
-        historyDateSelect.addEventListener('change', () => {
-            const selectedDate = historyDateSelect.value;
-            deleteHistoryBtn.disabled = !selectedDate;
-            loadHistoryForDate(selectedDate);
-        });
-
-        deleteHistoryBtn.addEventListener('click', () => {
-            const selectedDate = historyDateSelect.value;
-            if (selectedDate) {
-                deleteHistoryForDate(selectedDate);
-            }
-        });
-
-        refreshHistoryBtn.addEventListener('click', () => {
-            loadHistoryDates();
-            if (historyDateSelect.value) {
-                loadHistoryForDate(historyDateSelect.value);
-            }
-        });
-
-        // Load history dates on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            loadHistoryDates();
         });
 
         // --- PDF Conversion Logic ---

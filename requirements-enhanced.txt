@@ -1,6 +1,0 @@
-flask-socketio==5.3.6
-python-socketio==5.10.0
-# Optional voice dependencies - install if needed
-# speechrecognition==3.10.0
-# pyttsx3==2.90
-markdown==3.5.1

@@ -201,7 +201,26 @@ class EnhancedFeatures {
         analyticsBtn.className = 'btn btn-outline-info btn-sm';
         analyticsBtn.title = 'Analytics';
         analyticsBtn.onclick = () => this.showAnalytics();
-        document.querySelector('.d-flex.justify-content-center').appendChild(analyticsBtn);
+        
+        // Find the button group container and insert the analytics button after the send button
+        const buttonGroup = document.querySelector('#input-area .d-flex.gap-1');
+        const sendButton = document.getElementById('send-button');
+        
+        if (buttonGroup && sendButton) {
+            // Insert analytics button after the send button
+            const nextSibling = sendButton.nextElementSibling;
+            if (nextSibling) {
+                buttonGroup.insertBefore(analyticsBtn, nextSibling);
+            } else {
+                buttonGroup.appendChild(analyticsBtn);
+            }
+        } else {
+            // Fallback: append to input area if button group not found
+            const inputArea = document.getElementById('input-area');
+            if (inputArea) {
+                inputArea.appendChild(analyticsBtn);
+            }
+        }
     }
 
     async showAnalytics() {

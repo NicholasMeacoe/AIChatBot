@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, Response, stream_with_context, send_file, jsonify
+from werkzeug.utils import secure_filename
 from flask_socketio import SocketIO
 import google.generativeai as genai
 import os
@@ -13,9 +14,14 @@ import sqlite3
 import json
 from dotenv import load_dotenv
 from datetime import datetime
-<<<<<<< HEAD
 import markdown
-from serpapi import GoogleSearch
+try:
+    from serpapi import GoogleSearch
+    SERPAPI_AVAILABLE = True
+except ImportError:
+    print("Warning: serpapi not available. Web search functionality will be disabled.")
+    GoogleSearch = None
+    SERPAPI_AVAILABLE = False
 import requests # For fetching URL content
 from bs4 import BeautifulSoup # For parsing HTML
 import html  # Add this import at the top with other imports
@@ -32,7 +38,7 @@ FETCHED_MODELS = [] # Global list to store fetched models
 
 
 # --- Configuration ---
-DEFAULT_MODEL_NAME = "gemini-2.5-pro-exp-03-25" # Fallback default
+DEFAULT_MODEL_NAME = "gemini-2.5-flash" # Fallback default
 # Note: Free tier limits can change. These are examples based on typical free tiers.
 # Users should verify current limits in their Google Cloud Console.
 FREE_TIER_LIMITS = {
@@ -164,7 +170,6 @@ if not API_KEY:
     print("Error: GOOGLE_API_KEY not found in .env file. Using default model list.")
     FETCHED_MODELS = [DEFAULT_MODEL_NAME]
 else:
-<<<<<<< HEAD
     try:
         genai.configure(api_key=API_KEY)
         print("Gemini API Key configured.")
@@ -468,7 +473,9 @@ def parse_input_for_context(user_input):
 @app.route('/')
 def index():
     """Render the main chat page."""
-    return render_template('index.html')
+    return render_template('index.html', 
+                         available_models=FETCHED_MODELS,
+                         default_model=DEFAULT_MODEL_NAME)
 
 @app.route('/api/conversations', methods=['GET'])
 def get_conversations():
@@ -550,7 +557,6 @@ def update_model(conversation_id):
 @app.route('/chat', methods=['POST'])
 def chat_endpoint():
     """Handle incoming chat messages and stream responses."""
-<<<<<<< HEAD
     global FETCHED_MODELS  # Add this line
     if not API_KEY:
          return Response(json.dumps({"error": "Gemini API Key not configured."}), status=500, mimetype='application/json')
@@ -600,6 +606,9 @@ def chat_endpoint():
         if not serpapi_key:
             return Response(json.dumps({"error": "SERPAPI_API_KEY not found in .env file."}), status=500, mimetype='application/json')
 
+        if not SERPAPI_AVAILABLE:
+            return Response(json.dumps({"error": "serpapi package not installed. Please install with: pip install google-search-results"}), status=500, mimetype='application/json')
+
         try:
             params = {
                 "q": query,
@@ -626,7 +635,7 @@ def chat_endpoint():
     processed_paths_info = [] # To store info for DB logging
     image_data = None  # Store image data for Gemini Vision
 
-<<<<<<< HEAD
+
     if active_context_items:
         print(f"Processing active context: {active_context_items}") # Debug log
         for item_path in active_context_items:
@@ -686,7 +695,7 @@ def chat_endpoint():
     def generate_response():
         full_bot_response = ""
         try:
-<<<<<<< HEAD
+
             # Start a new chat session for each request OR manage sessions if needed
             # For simplicity, starting fresh each time. For history continuity with Gemini,
             # you'd need session management (e.g., using Flask sessions or a cache).
@@ -1061,6 +1070,58 @@ def list_folders_endpoint():
     # If the root itself needs to be selectable, the frontend logic might need adjustment.
 
     return jsonify(sorted(all_folders))
+
+
+# --- Context Menu Routes (for frontend compatibility) ---
+@app.route('/context/files')
+def context_files():
+    """Get files for context menu."""
+    return list_files_endpoint()
+
+@app.route('/context/folders')
+def context_folders():
+    """Get folders for context menu."""
+    return list_folders_endpoint()
+
+@app.route('/upload_image', methods=['POST'])
+def upload_image():
+    """Handle image upload for context."""
+    if 'image' not in request.files:
+        return jsonify({'type': 'error', 'message': 'No image file provided'}), 400
+    
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'type': 'error', 'message': 'No file selected'}), 400
+    
+    if file and allowed_file(file.filename):
+        try:
+            # Save the file to allowed_context directory
+            filename = secure_filename(file.filename)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            unique_filename = f"{timestamp}_{filename}"
+            filepath = os.path.join(ALLOWED_CONTEXT_DIR, unique_filename)
+            
+            file.save(filepath)
+            
+            return jsonify({
+                'type': 'success',
+                'message': 'Image uploaded successfully',
+                'context_item': {
+                    'path': unique_filename,
+                    'display_name': filename
+                }
+            })
+        except Exception as e:
+            return jsonify({'type': 'error', 'message': f'Failed to save image: {str(e)}'}), 500
+    else:
+        return jsonify({'type': 'error', 'message': 'Invalid file type'}), 400
+
+def allowed_file(filename):
+    """Check if file extension is allowed for images."""
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
 
 
 # --- Path Suggestion Route (Kept for potential future use or different trigger) ---
