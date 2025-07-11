@@ -92,3 +92,41 @@ def generate_summary(content, max_length=200):
         
     except Exception as e:
         return f"Error generating summary: {str(e)}"
+def generate_multimodal_response_stream(prompt_parts, model_name=None):
+    """Generate streaming response from Gemini model with multimodal support."""
+    if not configure_client():
+        yield "Error: Google AI not configured properly"
+        return
+    
+    try:
+        model_name = model_name or DEFAULT_MODEL_NAME
+        model = genai.GenerativeModel(model_name)
+        
+        response = model.generate_content(prompt_parts, stream=True)
+        
+        for chunk in response:
+            if chunk.text:
+                yield chunk.text
+                
+    except Exception as e:
+        yield f"Error generating multimodal response: {str(e)}"
+
+def generate_multimodal_response(prompt_parts, model_name=None):
+    """Generate non-streaming response from Gemini model with multimodal support."""
+    if not configure_client():
+        return "Error: Google AI not configured properly"
+    
+    try:
+        model_name = model_name or DEFAULT_MODEL_NAME
+        model = genai.GenerativeModel(model_name)
+        
+        response = model.generate_content(prompt_parts)
+        return response.text
+        
+    except Exception as e:
+        return f"Error generating multimodal response: {str(e)}"
+
+def is_vision_model(model_name):
+    """Check if the model supports vision/multimodal capabilities."""
+    vision_models = ['gemini-pro-vision', 'gemini-1.5-pro', 'gemini-1.5-flash']
+    return any(vision_model in model_name.lower() for vision_model in vision_models)

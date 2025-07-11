@@ -1,139 +1,205 @@
-# Gemini Chat Flask App
+# Modern Gemini Chat Application
 
-This is a web-based chat application powered by Google's Gemini AI models, built using the Flask framework. It allows users to interact with various Gemini models, provides a filterable and deletable history of the conversation, and includes features to add file, folder, or URL context to the chat prompts, manage active context, summarize context, and convert JPEG images to PDF (optionally with OCR).
+A modern, dark-themed web chat interface for Google's Gemini AI models with comprehensive functionality and a professional UI.
 
-## Features
+## 🚀 Quick Start
 
-*   **Multi-Model Gemini Integration:** Connects to the Google Generative AI API. Fetches available Gemini models and allows users to select the desired model via a dropdown. Uses a fallback default (`gemini-2.5-pro-exp-03-25`) if API fetching fails or the key is missing.
-*   **Web Interface:** A clean, responsive HTML interface (`templates/index.html`) built with Bootstrap 5 (supporting dark mode) for sending messages and viewing chat history.
-*   **Streaming Responses:** Bot responses are streamed back to the client in real-time using Server-Sent Events (SSE).
-*   **Chat History Management:**
-    *   Conversations are stored locally in an SQLite database (`chat_history.db`).
-    *   History can be viewed filtered by date using a dropdown.
-    *   History for a specific date can be deleted.
-*   **Context Injection & Management:**
-    *   **File/Folder Context:** Reference local files or folders within a designated `allowed_context` directory using the `@ {path}` syntax or the context menu. Content (for files) or listings (for folders) are prepended to the prompt.
-    *   **URL Context:** Reference web URLs using the `@ {url}` syntax or the context menu. The app fetches the URL, extracts text content (HTML/Text), and prepends it to the prompt.
-    *   **Active Context:** Added context items (files, folders, URLs) appear in an "Active Context" list. Only items in this list are sent with the *next* message. This list can be managed (items removed individually or all cleared).
-    *   **Context Summarization:** A button allows summarizing the content of all items currently in the "Active Context" list using the selected Gemini model.
-    *   **Security:** Prevents access outside the `allowed_context` directory (using `realpath` and path validation). Enforces file size limits (`MAX_FILE_SIZE_MB`) and URL content limits (`MAX_URL_CONTENT_BYTES`).
-*   **Image to PDF Conversion:**
-    *   Upload multiple JPEG/JPG images.
-    *   Convert the selected images into a single downloadable PDF file.
-    *   Optional OCR (Optical Character Recognition) using Tesseract to make the text in the PDF selectable (requires Tesseract installation).
-*   **Mermaid Diagram Rendering:** Bot responses containing Mermaid diagram code blocks (```mermaid ... ```) are automatically rendered as diagrams in the chat interface.
-*   **Error Handling:** Handles API key issues, file/URL access problems, model loading errors, network errors, and context processing errors, displaying relevant messages to the user.
-
-## Requirements
-
-*   Python 3.x
-*   Flask
-*   Google Generative AI SDK (`google-generativeai`)
-*   python-dotenv (for loading API keys from `.env` file)
-*   Requests (for fetching models and URL context)
-*   Beautiful Soup 4 (`beautifulsoup4`) (for parsing URL HTML content)
-*   Pillow (for image validation)
-*   img2pdf (for basic image-to-PDF conversion)
-*   PyPDF2 (for merging OCR-processed PDFs)
-*   html (for HTML encoding chat history)
-*   **Optional (for OCR):** Tesseract OCR Engine. Must be installed separately and accessible in the system's PATH. See [Tesseract Installation Guide](https://tesseract-ocr.github.io/tessdoc/Installation.html).
-*   **Optional (for OCR):** pytesseract Python wrapper (`pip install pytesseract`)
-
-You can install the required Python dependencies using `pip`:
+### 1. Install Dependencies
 ```bash
-pip install Flask google-generativeai python-dotenv requests beautifulsoup4 Pillow img2pdf PyPDF2 pytesseract html
-```
-*(Note: Update `requirements.txt` if you use one)*
-
-## Setup
-
-1.  **Clone the repository (or ensure you have the files):**
-    Make sure you have `app.py`, `templates/index.html`.
-2.  **Create the `allowed_context` directory:**
-    This directory must exist in the same location as `app.py`. The application will attempt to create it if it doesn't exist. Place any files or folders you want to reference in your chat prompts inside this directory.
-    ```bash
-    mkdir allowed_context
-    ```
-3.  **Create a `.env` file:**
-    In the same directory as `app.py`, create a file named `.env` and add your Google API key:
-    ```
-    GOOGLE_API_KEY=YOUR_API_KEY_HERE
-    ```
-    Replace `YOUR_API_KEY_HERE` with your actual API key obtained from Google AI Studio or Google Cloud. The app will attempt to fetch available models using this key.
-4.  **Install Dependencies:**
-    ```bash
-    pip install Flask google-generativeai python-dotenv requests beautifulsoup4 Pillow img2pdf PyPDF2 pytesseract
-    ```
-5.  **Install Tesseract (Optional):**
-    If you want to use the OCR feature for PDF conversion, install Tesseract OCR following the instructions for your operating system: [Tesseract Installation Guide](https://tesseract-ocr.github.io/tessdoc/Installation.html). Ensure the `tesseract` command is available in your system's PATH.
-6.  **Initialize Database:**
-    The application automatically creates the `chat_history.db` SQLite database file on the first run if it doesn't exist.
-
-## Usage
-
-1.  **Run the Flask Application:**
-    ```bash
-    python app.py
-    ```
-    The server will start, typically on `http://0.0.0.0:5000/`. The console will show the API key status, fetched models, database location, and server address.
-2.  **Open in Browser:**
-    Navigate to `http://localhost:5000` or `http://<your-machine-ip>:5000` in your web browser.
-3.  **Select Model:**
-    Choose the desired Gemini model from the "Model" dropdown.
-4.  **Manage History:**
-    *   Use the "History" dropdown to view conversations from a specific date or "All History".
-    *   If a specific date is selected, the "Delete" button becomes active, allowing you to remove all entries for that date.
-5.  **Add Context:**
-    *   Type `@` in the message input to open the context menu.
-    *   Select "Files" or "Folders" to browse and choose items from the `allowed_context` directory.
-    *   Select "Url", enter a URL (starting with `http://` or `https://`), and click "Add".
-    *   Alternatively, type the context directly:
-        *   File: `Summarize this: @ report.txt`
-        *   Folder: `List contents: @ project_files/`
-        *   URL: `What is this page about? @ https://example.com`
-        *   Paths/URLs can be quoted: `Analyze: @ "src/main.py"` or `@ "https://example.com/article"`
-    *   Added context items appear in the "Active Context" area above the input box.
-    *   Manage active context: Remove individual items using the 'x' button next to them, or clear all items with the "Clear All" button.
-    *   **Important:** Only the items listed in the "Active Context" area when you send a message will be prepended to that message's prompt.
-6.  **Summarize Context:**
-    Click the "Summarize" button (icon looks like lines of text) next to the Send button to ask the selected model to summarize the content of all items currently in the "Active Context" list.
-7.  **Chat:**
-    Type your message in the input box and press Enter or click the "Send" button (paper airplane icon). The message, along with any active context, will be sent to the selected Gemini model.
-8.  **Convert Images to PDF:**
-    *   Use the "Convert JPEGs to PDF" section at the bottom.
-    *   Click "Choose Files" to select one or more `.jpeg` or `.jpg` files.
-    *   Optionally, check the "Make text selectable (OCR)?" box (requires Tesseract).
-    *   Click "Convert & Download". The generated PDF will be downloaded.
-9.  **View Diagrams:** If the bot's response includes Mermaid code (e.g., for flowcharts, sequence diagrams), it will be rendered visually in the chat.
-
-## Database
-
-*   The chat history is stored in `chat_history.db`.
-*   The `history` table contains:
-    *   `id`: Unique identifier for the interaction.
-    *   `timestamp`: Time the interaction was saved.
-    *   `user_message`: The original message sent by the user (without prepended context).
-    *   `bot_response`: The full response received from the Gemini model.
-    *   `context_info`: A JSON string containing details about the processed context paths/URLs (files, folders, URLs) that were active for that specific message.
-
-## Running the App
-
-```bash
-python app.py
+pip install -r requirements.txt
 ```
 
-The application will print status messages to the console. Access the application through your web browser at the displayed address (e.g., `http://0.0.0.0:5000/`).
-
-## Running Tests
-
-To run the automated tests, first install the development dependencies:
-
-```bash
-pip install -r requirements-dev.txt
+### 2. Set Up Environment
+Create a `.env` file:
+```env
+GOOGLE_API_KEY=your_gemini_api_key_here
+SECRET_KEY=your_secret_key_here
 ```
 
-Then, run pytest from the root directory of the project:
-
+### 3. Run the Application
 ```bash
-pytest
+python3 app.py
 ```
+
+### 4. Access the Interface
+Open your browser to: **http://localhost:5000**
+
+## ✨ Features
+
+### 🎨 **Modern Dark UI**
+- Professional dark theme using Tailwind CSS
+- Responsive design that works on all devices
+- Smooth animations and transitions
+- Clean, modern interface components
+
+### 💬 **Chat Functionality**
+- **35+ Gemini Models** - Access to all available Gemini AI models
+- **Real-time Streaming** - Messages appear as they're generated
+- **Complete Message Display** - No truncation issues
+- **Conversation Management** - Multiple persistent chat threads
+- **System Prompts** - Customize AI behavior per conversation
+
+### 📁 **Context Integration**
+- **File Context** - Reference local files in your prompts
+- **Folder Context** - Include directory listings
+- **URL Context** - Fetch and include web content
+- **Context Management** - Easy add/remove context items
+- **Security** - Sandboxed file access within `allowed_context` directory
+
+### 📊 **Advanced Features**
+- **History Management** - Persistent conversation history with SQLite
+- **Date Filtering** - Filter conversations by specific dates
+- **PDF Conversion** - Convert images to PDF with optional OCR
+- **Syntax Highlighting** - Code blocks with proper formatting
+- **Mermaid Diagrams** - Automatic diagram rendering
+- **Markdown Support** - Rich text formatting in messages
+
+## 🏗️ **Architecture**
+
+### **Backend (Flask)**
+- Object-oriented design with clean separation of concerns
+- Streaming chat responses with Server-Sent Events
+- Comprehensive error handling and logging
+- Secure context processing with path validation
+- SQLite database with proper schema and relationships
+
+### **Frontend (Modern JavaScript)**
+- ES6+ features with async/await patterns
+- Real-time message streaming
+- Responsive modal dialogs
+- Context management interface
+- Auto-resizing input areas
+
+### **Database Schema**
+```sql
+conversations
+├── id (PRIMARY KEY)
+├── name
+├── timestamp
+├── system_prompt
+└── model
+
+history
+├── id (PRIMARY KEY)
+├── conversation_id (FOREIGN KEY)
+├── timestamp
+├── user_message
+├── bot_response
+└── context_info
+```
+
+## 🔒 **Security Features**
+
+- **Path Traversal Protection** - Prevents access outside allowed directories
+- **Input Sanitization** - HTML encoding and validation
+- **File Size Limits** - Configurable limits for uploads and context
+- **URL Validation** - Secure URL fetching with timeouts
+- **CORS Headers** - Proper cross-origin resource sharing
+
+## 📱 **Usage Guide**
+
+### **Starting a Conversation**
+1. The application loads with a default conversation
+2. Click "New Chat" to create additional conversations
+3. Select your preferred Gemini model from the dropdown
+4. Optionally set a system prompt to customize AI behavior
+5. Start chatting!
+
+### **Adding Context**
+1. Click "Context" to open the context management panel
+2. Use "Add File", "Add Folder", or "Add URL" buttons
+3. Select items from the modal dialogs
+4. Context items appear in your active context list
+5. They're automatically included in your next message
+
+### **Managing History**
+- All conversations are automatically saved to SQLite database
+- Switch between conversations using the sidebar
+- Each conversation maintains its own history and settings
+- Use the history filter to view messages from specific dates
+
+## 🔧 **Configuration**
+
+### **Environment Variables**
+```env
+GOOGLE_API_KEY=your_api_key          # Required: Gemini API key
+SECRET_KEY=your_secret_key           # Optional: Flask secret key
+```
+
+### **Application Settings**
+The application includes sensible defaults:
+- **Max File Size**: 10MB for context files
+- **Max URL Content**: 2MB for web content
+- **Request Timeout**: 10 seconds for URL fetching
+- **Database**: SQLite with automatic initialization
+
+## 🐛 **Troubleshooting**
+
+### **Common Issues**
+
+**"No models available"**
+- Check your `GOOGLE_API_KEY` in the `.env` file
+- Verify the API key has proper permissions
+
+**"Context directory not found"**
+- The `allowed_context` directory is created automatically
+- Ensure write permissions in the application directory
+
+**"Database errors"**
+- Delete `chat_history.db` to reset the database
+- Check file permissions in the application directory
+
+**"Messages not displaying completely"**
+- This has been fixed in the new version
+- Ensure you're using the updated `app.py`
+
+## 🚀 **Production Deployment**
+
+For production use:
+
+1. **Use a WSGI Server**:
+```bash
+pip install gunicorn
+gunicorn -w 4 -b 0.0.0.0:5000 app:app
+```
+
+2. **Set Environment Variables**:
+```bash
+export FLASK_ENV=production
+export GOOGLE_API_KEY=your_key
+```
+
+3. **Configure Reverse Proxy** (nginx example):
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:5000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+## 📝 **What's New**
+
+This version includes major improvements over the original:
+
+- ✅ **Complete message display** - No more truncated responses
+- ✅ **Modern dark theme** - Professional UI with Tailwind CSS
+- ✅ **Clean architecture** - Object-oriented, maintainable code
+- ✅ **Proper error handling** - Comprehensive error management
+- ✅ **Real-time streaming** - Smooth message delivery
+- ✅ **Enhanced security** - Better input validation and sanitization
+- ✅ **Responsive design** - Works perfectly on all devices
+
+## 🤝 **Contributing**
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+---
+
+**🎉 Enjoy your modern Gemini Chat experience!**
+
+Start the application with `python3 app.py` and visit http://localhost:5000

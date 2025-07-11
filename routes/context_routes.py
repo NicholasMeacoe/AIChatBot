@@ -255,3 +255,114 @@ Keep the summary clear and well-organized."""
         print(f"Error generating context summary with model {selected_model_name}: {e}")
         # Return a specific error message to the client, including details
         return jsonify({"error": f"Failed to generate summary using model {selected_model_name}.", "details": str(e)}), 500
+
+# Add upload functionality
+from werkzeug.utils import secure_filename
+import uuid
+from datetime import datetime
+from features.multimodal import MultiModalProcessor
+
+# Initialize multimodal processor
+multimodal_processor = MultiModalProcessor()
+
+# Configure upload settings
+ALLOWED_EXTENSIONS = {
+    'txt', 'md', 'json', 'csv', 'pdf', 'doc', 'docx',
+    'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp',
+    'mp3', 'wav', 'm4a', 'ogg',
+    'mp4', 'avi', 'mov', 'mkv'
+}
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+@context_bp.route('/upload', methods=['POST'])
+def upload_files():
+    """Handle file uploads with drag-and-drop support"""
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files provided'}), 400
+    
+    files = request.files.getlist('files')
+    if not files or all(file.filename == '' for file in files):
+        return jsonify({'error': 'No files selected'}), 400
+    
+    # Ensure upload directory exists
+    if not config.ALLOWED_CONTEXT_DIR or not os.path.exists(config.ALLOWED_CONTEXT_DIR):
+        return jsonify({'error': 'Upload directory not configured'}), 500
+    
+    uploaded_files = []
+    errors = []
+    
+    for file in files:
+        if file and file.filename and allowed_file(file.filename):
+            try:
+                # Create secure filename with timestamp to avoid conflicts
+                original_filename = secure_filename(file.filename)
+                name, ext = os.path.splitext(original_filename)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                unique_filename = f"{name}_{timestamp}_{uuid.uuid4().hex[:8]}{ext}"
+                
+                # Save file to allowed context directory
+                file_path = os.path.join(config.ALLOWED_CONTEXT_DIR, unique_filename)
+                file.save(file_path)
+                
+                # Process multimodal files for additional context
+                multimodal_data = multimodal_processor.process_file(file_path)
+                if multimodal_data and multimodal_data.get('type') == 'image':
+                    # Store image metadata for later use
+                    metadata_path = file_path + '.metadata.json'
+                    with open(metadata_path, 'w') as f:
+                        json.dump({
+                            'original_name': file.filename,
+                            'upload_time': datetime.now().isoformat(),
+                            'multimodal_data': multimodal_data
+                        }, f)
+                
+                uploaded_files.append(unique_filename)
+                
+            except Exception as e:
+                errors.append(f"Failed to upload {file.filename}: {str(e)}")
+        else:
+            errors.append(f"File type not allowed: {file.filename}")
+    
+    response_data = {
+        'uploaded_files': uploaded_files,
+        'success_count': len(uploaded_files)
+    }
+    
+    if errors:
+        response_data['errors'] = errors
+    
+    if not uploaded_files:
+        return jsonify({'error': 'No files were successfully uploaded', 'details': errors}), 400
+    
+    return jsonify(response_data)
+@context_bp.route('/check_images', methods=['POST'])
+def check_images():
+    """Check if context items contain image files"""
+    data = request.json
+    if not data or 'context_items' not in data:
+        return jsonify({'has_images': False})
+    
+    context_items = data.get('context_items', [])
+    if not isinstance(context_items, list):
+        return jsonify({'has_images': False})
+    
+    image_extensions = multimodal_processor.supported_image_formats
+    has_images = False
+    image_files = []
+    
+    for item in context_items:
+        if not item.startswith(('http://', 'https://')):
+            # Check file extension
+            ext = os.path.splitext(item.lower())[1]
+            if ext in image_extensions:
+                has_images = True
+                image_files.append(item)
+    
+    return jsonify({
+        'has_images': has_images,
+        'image_count': len(image_files),
+        'image_files': image_files
+    })

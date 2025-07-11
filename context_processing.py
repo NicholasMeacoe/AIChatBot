@@ -312,3 +312,103 @@ def process_context_path(path):
 # It deals more with request parsing and orchestrating calls to
 # process_context_path/fetch_and_process_url, so it fits better
 # within the routing logic or a dedicated request handling module.
+# Add multimodal support
+from features.multimodal import MultiModalProcessor
+import json
+
+# Initialize multimodal processor
+multimodal_processor = MultiModalProcessor()
+
+def process_context_path_with_multimodal(path):
+    """
+    Enhanced version of process_context_path that handles multimodal files.
+    Returns context_string, error_message, processed_path_info, and multimodal_data
+    """
+    context_str, error_msg, processed_path_info = process_context_path(path)
+    multimodal_data = None
+    
+    if not error_msg and processed_path_info.get("resolved"):
+        file_path = processed_path_info["resolved"]
+        
+        # Check if this is a multimodal file
+        multimodal_data = multimodal_processor.process_file(file_path)
+        
+        if multimodal_data:
+            if multimodal_data.get('type') == 'image':
+                # For images, add description to context but keep image data separate
+                image_context = f"\n[IMAGE: {multimodal_data.get('description', 'Image file')}]\n"
+                if multimodal_data.get('metadata'):
+                    metadata = multimodal_data['metadata']
+                    image_context += f"Image details: {metadata.get('original_size', 'Unknown size')}, "
+                    image_context += f"Format: {metadata.get('format', 'Unknown')}\n"
+                
+                context_str += image_context
+                processed_path_info["multimodal_type"] = "image"
+                processed_path_info["has_visual_content"] = True
+                
+            elif multimodal_data.get('type') == 'audio':
+                # For audio, add transcription to context
+                audio_context = f"\n[AUDIO: {multimodal_data.get('description', 'Audio file')}]\n"
+                if multimodal_data.get('transcription'):
+                    audio_context += f"Transcription: {multimodal_data['transcription']}\n"
+                
+                context_str += audio_context
+                processed_path_info["multimodal_type"] = "audio"
+                
+            elif multimodal_data.get('type') == 'video':
+                # For video, add description to context
+                video_context = f"\n[VIDEO: {multimodal_data.get('description', 'Video file')}]\n"
+                context_str += video_context
+                processed_path_info["multimodal_type"] = "video"
+    
+    return context_str, error_msg, processed_path_info, multimodal_data
+
+def get_image_context_items(context_items):
+    """
+    Extract image files from context items and return their multimodal data.
+    Used for preparing multimodal prompts for Gemini Vision.
+    """
+    image_data_list = []
+    
+    for item in context_items:
+        if not item.startswith(('http://', 'https://')):
+            # This is a file path
+            try:
+                # Construct full path
+                if not config.ALLOWED_CONTEXT_DIR:
+                    continue
+                    
+                clean_path = item.strip().strip("'\"")
+                normalized_path = os.path.normpath(clean_path)
+                
+                if os.path.isabs(normalized_path) or ".." in normalized_path.split(os.path.sep):
+                    continue
+                    
+                full_path = os.path.join(config.ALLOWED_CONTEXT_DIR, normalized_path)
+                full_path_resolved = os.path.realpath(full_path)
+                allowed_dir_resolved = os.path.realpath(config.ALLOWED_CONTEXT_DIR)
+                
+                # Security check
+                if os.name == 'nt':
+                    if not full_path_resolved.lower().startswith(allowed_dir_resolved.lower()):
+                        continue
+                else:
+                    if not full_path_resolved.startswith(allowed_dir_resolved):
+                        continue
+                
+                if os.path.isfile(full_path_resolved):
+                    # Check if it's an image file
+                    ext = os.path.splitext(full_path_resolved)[1].lower()
+                    if ext in multimodal_processor.supported_image_formats:
+                        image_context = multimodal_processor.get_image_context_for_gemini(full_path_resolved)
+                        if image_context:
+                            image_data_list.append({
+                                'file_path': item,
+                                'image_data': image_context
+                            })
+                            
+            except Exception as e:
+                print(f"Error processing image context for {item}: {e}")
+                continue
+    
+    return image_data_list
