@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Submission Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
+        }
+        
+        .header {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        
+        .status.success { background-color: #d4edda; color: #155724; }
+        .status.error { background-color: #f8d7da; color: #721c24; }
+        .status.info { background-color: #d1ecf1; color: #0c5460; }
+        
+        #chatbox {
+            flex-grow: 1;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+            background-color: #fff;
+            margin-bottom: 20px;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: 50px;
+            text-align: right;
+        }
+        
+        .bot-message {
+            background-color: #f5f5f5;
+            margin-right: 50px;
+        }
+        
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #e57373;
+        }
+        
+        .timestamp {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .input-area {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        #message-input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        #send-button {
+            background-color: #007bff;
+            color: white;
+        }
+        
+        #send-button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        #clear-button {
+            background-color: #6c757d;
+            color: white;
+        }
+        
+        .debug-info {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Chat Submission Test Interface</h1>
+            <div id="status" class="status info">Initializing...</div>
+            <div>
+                <label for="model-select">Model:</label>
+                <select id="model-select">
+                    {% for model_name in available_models %}
+                        {% set display_name = model_name.split('/')[-1] %}
+                        <option value="{{ model_name }}" {% if model_name == default_model %}selected{% endif %}>
+                            {{ display_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+                <button id="test-connection">Test Connection</button>
+                <button id="clear-button">Clear Chat</button>
+            </div>
+        </div>
+        
+        <div id="chatbox"></div>
+        
+        <div class="input-area">
+            <input type="text" id="message-input" placeholder="Type your test message..." autocomplete="off">
+            <button id="send-button">Send</button>
+        </div>
+        
+        <div id="debug-info" class="debug-info" style="display: none;"></div>
+    </div>
+    
+    <script>
+        // Test interface for chat submission
+        let conversationId = null;
+        let isSubmitting = false;
+        
+        const statusDiv = document.getElementById('status');
+        const chatbox = document.getElementById('chatbox');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const clearButton = document.getElementById('clear-button');
+        const testConnectionButton = document.getElementById('test-connection');
+        const modelSelect = document.getElementById('model-select');
+        const debugInfo = document.getElementById('debug-info');
+        
+        // Utility functions
+        function updateStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function addMessage(text, type, timestamp = new Date()) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.textContent = text;
+            messageDiv.appendChild(contentDiv);
+            
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'timestamp';
+            timeDiv.textContent = timestamp.toLocaleString();
+            messageDiv.appendChild(timeDiv);
+            
+            chatbox.appendChild(messageDiv);
+            chatbox.scrollTop = chatbox.scrollHeight;
+            
+            return messageDiv;
+        }
+        
+        function addDebugInfo(info) {
+            debugInfo.style.display = 'block';
+            debugInfo.textContent = JSON.stringify(info, null, 2);
+        }
+        
+        // Test connection to server
+        async function testConnection() {
+            updateStatus('Testing connection...', 'info');
+            
+            try {
+                const response = await fetch('/api/conversations');
+                if (response.ok) {
+                    const conversations = await response.json();
+                    updateStatus(`Connection OK. Found ${conversations.length} conversations.`, 'success');
+                    addDebugInfo({ conversations: conversations.slice(0, 3) }); // Show first 3
+                } else {
+                    updateStatus(`Connection failed: ${response.status}`, 'error');
+                }
+            } catch (error) {
+                updateStatus(`Connection error: ${error.message}`, 'error');
+                addDebugInfo({ error: error.message });
+            }
+        }
+        
+        // Create or get conversation
+        async function ensureConversation() {
+            if (conversationId) {
+                return conversationId;
+            }
+            
+            try {
+                updateStatus('Creating conversation...', 'info');
+                
+                const response = await fetch('/api/conversations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        system_prompt: 'You are a helpful AI assistant for testing.',
+                        model: modelSelect.value
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to create conversation: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                conversationId = data.id;
+                updateStatus(`Conversation created: ${conversationId}`, 'success');
+                addDebugInfo({ conversationId, model: modelSelect.value });
+                
+                return conversationId;
+            } catch (error) {
+                updateStatus(`Failed to create conversation: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+        
+        // Send message
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message || isSubmitting) return;
+            
+            isSubmitting = true;
+            sendButton.disabled = true;
+            updateStatus('Sending message...', 'info');
+            
+            try {
+                // Add user message to UI
+                addMessage(message, 'user-message');
+                messageInput.value = '';
+                
+                // Ensure we have a conversation
+                const convId = await ensureConversation();
+                
+                // Prepare request
+                const requestData = {
+                    message: message,
+                    conversation_id: convId,
+                    model_name: modelSelect.value,
+                    active_context: []
+                };
+                
+                addDebugInfo({ request: requestData });
+                
+                // Send request
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                if (!response.ok) {
+                    let errorMsg = `HTTP ${response.status}`;
+                    try {
+                        const errorData = await response.json();
+                        errorMsg = errorData.error || errorMsg;
+                    } catch (e) {
+                        // Response might not be JSON
+                    }
+                    throw new Error(errorMsg);
+                }
+                
+                // Process streaming response
+                updateStatus('Receiving response...', 'info');
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let fullResponse = '';
+                
+                // Create bot message container
+                const botMessageDiv = addMessage('', 'bot-message');
+                const botContentDiv = botMessageDiv.querySelector('div');
+                
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    
+                    for (let i = 0; i < lines.length - 1; i++) {
+                        const line = lines[i].trim();
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const jsonData = line.substring(6);
+                                if (jsonData === '[DONE]') continue;
+                                
+                                const data = JSON.parse(jsonData);
+                                
+                                if (data.text) {
+                                    fullResponse += data.text;
+                                    botContentDiv.textContent = fullResponse;
+                                } else if (data.error) {
+                                    throw new Error(data.error);
+                                } else if (data.context_error) {
+                                    console.warn('Context error:', data.context_error);
+                                }
+                            } catch (e) {
+                                console.error('Error parsing SSE:', e);
+                            }
+                        }
+                    }
+                    
+                    buffer = lines[lines.length - 1];
+                }
+                
+                updateStatus(`Message sent successfully (${fullResponse.length} chars)`, 'success');
+                addDebugInfo({ 
+                    responseLength: fullResponse.length,
+                    conversationId: convId,
+                    model: modelSelect.value
+                });
+                
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`, 'error');
+                addMessage(`Error: ${error.message}`, 'error-message');
+                addDebugInfo({ error: error.message, stack: error.stack });
+            } finally {
+                isSubmitting = false;
+                sendButton.disabled = false;
+            }
+        }
+        
+        // Clear chat
+        function clearChat() {
+            chatbox.innerHTML = '';
+            conversationId = null;
+            debugInfo.style.display = 'none';
+            updateStatus('Chat cleared', 'info');
+        }
+        
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        clearButton.addEventListener('click', clearChat);
+        testConnectionButton.addEventListener('click', testConnection);
+        
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            updateStatus('Ready to test chat submission', 'success');
+            messageInput.focus();
+        });
+    </script>
+</body>
+</html>

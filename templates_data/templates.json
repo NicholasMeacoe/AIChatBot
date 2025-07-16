@@ -1,0 +1,30 @@
+{
+  "code_review": {
+    "name": "Code Review",
+    "category": "Development",
+    "template": "Please review this code for:\n1. Best practices\n2. Security issues\n3. Performance optimizations\n4. Code clarity\n\n{code_context}",
+    "variables": [
+      "code_context"
+    ]
+  },
+  "document_summary": {
+    "name": "Document Summary",
+    "category": "Analysis",
+    "template": "Please provide a comprehensive summary of the following document:\n\n{document_content}\n\nFocus on:\n- Key points\n- Main conclusions\n- Action items",
+    "variables": [
+      "document_content"
+    ]
+  },
+  "creative_writing": {
+    "name": "Creative Writing",
+    "category": "Creative",
+    "template": "Write a {style} story about {topic} with the following elements:\n- Setting: {setting}\n- Main character: {character}\n- Conflict: {conflict}",
+    "variables": [
+      "style",
+      "topic",
+      "setting",
+      "character",
+      "conflict"
+    ]
+  }
+}

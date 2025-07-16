@@ -8,7 +8,7 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # --- Model Configuration ---
-DEFAULT_MODEL_NAME = "models/gemini-1.5-flash-latest" # Ensure "models/" prefix for new SDK
+DEFAULT_MODEL_NAME = "gemini-2.5-flash" # Updated default based on common availability
 # Note: Free tier limits can change. Users should verify current limits.
 # Keys should match the API model name (e.g., "models/gemini-1.5-flash-latest")
 # We will fetch the actual model names from the API, this is just for limits.

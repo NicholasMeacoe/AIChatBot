@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Chat</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chatbox { height: 300px; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; overflow-y: auto; }
+        .user-message { background-color: #e1f5fe; padding: 5px; margin: 5px 0; border-radius: 5px; text-align: right; }
+        .bot-message { background-color: #f0f0f0; padding: 5px; margin: 5px 0; border-radius: 5px; }
+        .error-message { background-color: #ffebee; color: #c62828; padding: 5px; margin: 5px 0; border-radius: 5px; }
+        #input-area { display: flex; }
+        #message-input { flex-grow: 1; padding: 5px; margin-right: 5px; }
+        #send-button:disabled { background-color: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <h1>Simple Chat Interface</h1>
+    <div>
+        <a href="/test-submission">Test Submission Interface</a> | 
+        <a href="/minimal">Minimal Interface</a> | 
+        <a href="/">Full Interface</a>
+    </div>
+    <div id="chatbox"></div>
+    <div id="input-area">
+        <input type="text" id="message-input" placeholder="Type your message...">
+        <button id="send-button">Send</button>
+    </div>
+
+    <!-- Load our comprehensive chat submission fix -->
+    <script src="{{ url_for('static', filename='js/chat-submission-fix.js') }}"></script>
+</body>
+</html>

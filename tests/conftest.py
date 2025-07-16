@@ -125,45 +125,29 @@ def mock_gemini_client(monkeypatch):
         mock_genai_client_instance.models = mock_models_object
 
         # 1. Mock client.models.list() for get_available_models()
-        # DEFAULT_MODEL_NAME from config.py is already prefixed like "models/gemini..."
-        mock_model_default = MagicMock()
-        mock_model_default.name = DEFAULT_MODEL_NAME
-        mock_model_default.supported_actions = ['generateContent']
+        # It should return a list of objects that have 'name' and 'supported_actions' attributes.
+        # Using genai.types.Model for spec if available, else MagicMock.
+        # For simplicity, using MagicMock and ensuring attributes are present.
+        mock_sdk_model_default = MagicMock(supported_actions=['generateContent']) # As per gemini_utils logic
+        mock_sdk_model_default.name = f"models/{DEFAULT_MODEL_NAME}" # Set 'name' as an attribute
 
-        mock_model_pro = MagicMock()
-        mock_model_pro.name = "models/gemini-1.0-pro"
-        mock_model_pro.supported_actions = ['generateContent']
+        mock_sdk_model_pro = MagicMock(supported_actions=['generateContent'])
+        mock_sdk_model_pro.name = "models/gemini-1.0-pro" # Set 'name' as an attribute
 
-        mock_models_object.list.return_value = [mock_model_default, mock_model_pro]
+        mock_models_object.list.return_value = [mock_sdk_model_default, mock_sdk_model_pro]
 
-        # 2. Mock client.models.generate_content() for both streaming and non-streaming.
-        # This single mock will handle both cases based on the `stream` kwarg.
-        def mock_generate_content_side_effect(*args, **kwargs):
-            # Expected call for generate_content: model=<name>, contents=<prompt>, [stream=True]
-            # The first positional arg might be the model name if not passed as kwarg.
-            # However, gemini_utils.py calls it with keyword args.
+        # 2. Mock client.models.generate_content_stream() for generate_response_stream()
+        mock_stream_chunk_1 = MagicMock()
+        mock_stream_chunk_1.text = "Test response chunk 1."
+        mock_stream_chunk_2 = MagicMock()
+        mock_stream_chunk_2.text = "Test response chunk 2."
+        # This method is an iterable (stream)
+        mock_models_object.generate_content_stream.return_value = iter([mock_stream_chunk_1, mock_stream_chunk_2])
 
-            is_streaming = kwargs.get('stream', False)
-
-            if is_streaming:
-                # Return an iterator of mock chunks for streaming
-                mock_chunk1 = MagicMock()
-                mock_chunk1.text = "Test response chunk 1."
-                mock_chunk2 = MagicMock()
-                mock_chunk2.text = "Test response chunk 2."
-                # Ensure parts and candidates are present if accessed by application code, though text is primary.
-                mock_chunk1.candidates = [MagicMock(content=MagicMock(parts=[MagicMock(text="Test response chunk 1.")]))]
-                mock_chunk2.candidates = [MagicMock(content=MagicMock(parts=[MagicMock(text="Test response chunk 2.")]))]
-                return iter([mock_chunk1, mock_chunk2])
-            else:
-                # Return a single mock response object for non-streaming
-                mock_response = MagicMock()
-                mock_response.text = "Test summary response."
-                # Ensure parts and candidates are present
-                mock_response.candidates = [MagicMock(content=MagicMock(parts=[MagicMock(text="Test summary response.")]))]
-                return mock_response
-
-        mock_models_object.generate_content.side_effect = mock_generate_content_side_effect
+        # 3. Mock client.models.generate_content() for generate_summary()
+        mock_summary_response = MagicMock() # This is a GenerateContentResponse object
+        mock_summary_response.text = "Test summary response."
+        mock_models_object.generate_content.return_value = mock_summary_response
 
         # Now, call the actual configure_client function from gemini_utils.
         # This will execute `client = genai.Client(api_key=GOOGLE_API_KEY)`,
