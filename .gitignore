@@ -123,3 +123,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 chat_history.db
+user_profiles.db
+allowed_context/
