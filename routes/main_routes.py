@@ -218,153 +218,56 @@ from context_processing import get_image_context_items
 # Enhanced chat endpoint with multimodal support
 @main_bp.route('/chat_multimodal', methods=['POST'])
 def chat_multimodal_endpoint():
-    """Handle incoming chat messages with multimodal support (images)."""
+    """
+    Handles chat messages with multimodal support (images), ensuring that
+    image data is correctly prioritized and processed.
+    """
     if not config.GOOGLE_API_KEY:
         return Response(json.dumps({"error": "Gemini API Key not configured."}), status=500, mimetype='application/json')
 
     data = request.json
-    user_message = data.get('message')
-    active_context_items = data.get('active_context', [])
-    selected_model_name = data.get('model_name', DEFAULT_MODEL_NAME)
+    user_message = data.get('message', '')
+    image_parts = data.get('image_parts', [])
+    selected_model_name = data.get('model', DEFAULT_MODEL_NAME)
 
-    if not user_message and not active_context_items:
-        return Response(json.dumps({"error": "No message or context provided."}), status=400, mimetype='application/json')
+    # The frontend sends image data in `image_parts`. If this is missing,
+    # check if it was sent in `active_context` by mistake.
+    if not image_parts:
+        active_context = data.get('active_context', [])
+        image_parts = [item for item in active_context if isinstance(item, dict) and 'data' in item]
 
-    # Validate selected model
-    available_models = get_available_models()
-    if selected_model_name not in available_models:
-        available_models = get_available_models(force_refresh=True)
-        if selected_model_name not in available_models:
-            return Response(json.dumps({"error": f"Invalid model selected: {selected_model_name}"}), status=400, mimetype='application/json')
+    if not user_message and not image_parts:
+        return Response(json.dumps({"error": "No message or image provided."}), status=400, mimetype='application/json')
 
-    # Check if this is a vision-capable model
-    supports_vision = is_vision_model(selected_model_name)
-    
-    # Process context items
-    context_errors_for_sse = []
-    processed_context_info_for_db = []
-    context_parts_for_prompt = []
-    image_data_list = []
+    if not is_vision_model(selected_model_name):
+        return Response(json.dumps({"error": f"The selected model '{selected_model_name}' does not support images."}), status=400, mimetype='application/json')
 
-    if active_context_items:
-        print(f"Processing active context with multimodal support: {active_context_items}")
-        
-        # Extract image context if model supports vision
-        if supports_vision:
-            image_data_list = get_image_context_items(active_context_items)
-            print(f"Found {len(image_data_list)} image(s) for multimodal processing")
-        
-        # Process all context items (including non-images)
-        for item_path in active_context_items:
-            context_part_content = ""
-            error_message_for_prompt = None
-            path_info = None
+    # Construct the prompt for the model
+    prompt_parts = [user_message] if user_message else []
+    prompt_parts.extend(image_parts)
 
-            try:
-                if item_path.startswith(('http://', 'https://')):
-                    context_part_content, error, path_info = fetch_and_process_url(item_path)
-                else:
-                    context_part_content, error, path_info = process_context_path(item_path)
-
-                if path_info:
-                    processed_context_info_for_db.append(path_info)
-                else:
-                    path_info = {"original": item_path, "status": "error", "message": "Processing function returned no info"}
-                    processed_context_info_for_db.append(path_info)
-
-                if error:
-                    error_message_for_sse = path_info.get("message") or f"Error processing: {item_path}"
-                    context_errors_for_sse.append(error_message_for_sse)
-                    error_message_for_prompt = f"Error processing context for {path_info.get('original', item_path)}: {path_info.get('message', 'Unknown error')}. "
-                    context_parts_for_prompt.append(error_message_for_prompt)
-
-                if context_part_content:
-                    context_parts_for_prompt.append(context_part_content)
-
-            except Exception as e:
-                error_msg = f"Unexpected error processing context item '{item_path}': {e}"
-                print(error_msg)
-                context_errors_for_sse.append(error_msg)
-                context_parts_for_prompt.append(f"Error processing context for {item_path}: {error_msg}. ")
-                if not path_info:
-                    processed_context_info_for_db.append({
-                        "original": item_path, "status": "error", "message": error_msg
-                    })
-
-    full_context_str = "".join(context_parts_for_prompt)
-    display_user_message = user_message if user_message else "(Referring to provided context)"
-    
-    # Prepare multimodal prompt if we have images and vision support
-    if supports_vision and image_data_list:
-        # Create multimodal prompt parts
-        prompt_parts = []
-        
-        # Add text content
-        final_text_prompt = full_context_str + display_user_message
-        prompt_parts.append(final_text_prompt)
-        
-        # Add image data
-        for image_item in image_data_list:
-            prompt_parts.append(image_item['image_data'])
-        
-        use_multimodal = True
-    else:
-        # Use regular text-only prompt
-        final_prompt = full_context_str + display_user_message
-        use_multimodal = False
-
-    # Store original user message for DB
-    original_user_message_for_db = user_message if user_message else ""
-
-    # Streaming Response
+    # --- Streaming Response ---
     def generate_and_save():
-        if context_errors_for_sse:
-            sse_error_data = json.dumps({"context_error": "\n".join(context_errors_for_sse)})
-            yield f"data: {sse_error_data}\n\n"
-
         full_bot_response = ""
         try:
-            if use_multimodal:
-                print(f"Using multimodal generation with {len(image_data_list)} image(s)")
-                for chunk_data in generate_multimodal_response_stream(prompt_parts, selected_model_name):
-                    yield chunk_data
-                    try:
-                        data_dict = json.loads(chunk_data.split("data: ")[1])
-                        if "text" in data_dict:
-                            full_bot_response += data_dict["text"]
-                        elif "error" in data_dict:
-                            print(f"Multimodal generation error: {data_dict['error']}")
-                            return
-                    except (IndexError, json.JSONDecodeError):
-                        pass
-            else:
-                for chunk_data in generate_response_stream(final_prompt, selected_model_name):
-                    yield chunk_data
-                    try:
-                        data_dict = json.loads(chunk_data.split("data: ")[1])
-                        if "text" in data_dict:
-                            full_bot_response += data_dict["text"]
-                        elif "error" in data_dict:
-                            print(f"Generation error: {data_dict['error']}")
-                            return
-                    except (IndexError, json.JSONDecodeError):
-                        pass
+            streamer = generate_multimodal_response_stream(prompt_parts, selected_model_name)
+            
+            for chunk_data in streamer:
+                yield chunk_data
+                try:
+                    data_dict = json.loads(chunk_data.split("data: ")[1])
+                    if "text" in data_dict:
+                        full_bot_response += data_dict["text"]
+                    elif "error" in data_dict:
+                        print(f"Generation error: {data_dict['error']}")
+                        return 
+                except (IndexError, json.JSONDecodeError):
+                    pass
 
-            # Save to Database
             if full_bot_response:
-                # Add multimodal info to context info for DB
-                for i, info in enumerate(processed_context_info_for_db):
-                    if any(img['file_path'] == info.get('original') for img in image_data_list):
-                        processed_context_info_for_db[i]['multimodal_processed'] = True
-                        processed_context_info_for_db[i]['vision_model_used'] = supports_vision
-                
-                save_chat_history(
-                    original_user_message_for_db,
-                    full_bot_response,
-                    processed_context_info_for_db
-                )
+                save_chat_history(user_message, full_bot_response, [])
             else:
-                print("Skipping DB save as bot response was empty or generation failed.")
+                print("Skipping DB save as bot response was empty.")
 
         except Exception as e:
             print(f"Error during multimodal chat generation: {e}")

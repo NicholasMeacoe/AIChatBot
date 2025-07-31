@@ -102,7 +102,16 @@ def generate_multimodal_response_stream(prompt_parts, model_name=None):
         model_name = model_name or DEFAULT_MODEL_NAME
         model = genai.GenerativeModel(model_name)
         
-        response = model.generate_content(prompt_parts, stream=True)
+        # Convert base64 image data into Part objects
+        api_ready_parts = []
+        for part in prompt_parts:
+            if isinstance(part, dict) and 'mime_type' in part and 'data' in part:
+                api_ready_parts.append(genai.Part.from_data(part['data'], mime_type=part['mime_type']))
+            else:
+                api_ready_parts.append(part)
+
+        print(f"DEBUG: Prompt parts being sent to generate_content: {api_ready_parts}")
+        response = model.generate_content(api_ready_parts, stream=True)
         
         for chunk in response:
             if chunk.text:
@@ -110,6 +119,7 @@ def generate_multimodal_response_stream(prompt_parts, model_name=None):
                 
     except Exception as e:
         yield f"Error generating multimodal response: {str(e)}"
+
 
 def generate_multimodal_response(prompt_parts, model_name=None):
     """Generate non-streaming response from Gemini model with multimodal support."""
@@ -128,5 +138,5 @@ def generate_multimodal_response(prompt_parts, model_name=None):
 
 def is_vision_model(model_name):
     """Check if the model supports vision/multimodal capabilities."""
-    vision_models = ['gemini-pro-vision', 'gemini-1.5-pro', 'gemini-1.5-flash']
+    vision_models = ['gemini-pro-vision', 'gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-2.5-flash']
     return any(vision_model in model_name.lower() for vision_model in vision_models)

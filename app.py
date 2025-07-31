@@ -142,11 +142,31 @@ class GeminiChatApp:
                                  available_models=self.available_models,
                                  default_model=self.DEFAULT_MODEL)
         
-        @self.app.route('/api/conversations', methods=['GET'])
-        def get_conversations():
+        @self.app.route('/api/conversations/dates', methods=['GET'])
+        def get_conversation_dates():
             conn = self.get_db()
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM conversations ORDER BY timestamp DESC")
+            cursor.execute("SELECT DISTINCT DATE(timestamp) as chat_date FROM conversations ORDER BY chat_date DESC")
+            dates = [row['chat_date'] for row in cursor.fetchall()]
+            conn.close()
+            return jsonify(dates)
+
+        @self.app.route('/api/conversations', methods=['GET'])
+        def get_conversations():
+            date_filter = request.args.get('date')
+            conn = self.get_db()
+            cursor = conn.cursor()
+            if date_filter:
+                try:
+                    # Validate date format
+                    datetime.strptime(date_filter, '%Y-%m-%d')
+                    cursor.execute("SELECT * FROM conversations WHERE DATE(timestamp) = ? ORDER BY timestamp DESC", (date_filter,))
+                except ValueError:
+                    # Invalid date format, return all conversations
+                    cursor.execute("SELECT * FROM conversations ORDER BY timestamp DESC")
+            else:
+                cursor.execute("SELECT * FROM conversations ORDER BY timestamp DESC")
+            
             conversations = [dict(row) for row in cursor.fetchall()]
             conn.close()
             return jsonify(conversations)
@@ -321,13 +341,76 @@ class GeminiChatApp:
         @self.app.route('/api/chat_multimodal', methods=['POST'])
         def chat_multimodal():
             """Handle multimodal chat with image support"""
-            # For now, redirect to regular chat endpoint
-            # This can be enhanced later with proper multimodal processing
             return Response(
-                stream_with_context(self.handle_chat_stream()),
+                stream_with_context(self.handle_multimodal_chat_stream()),
                 mimetype='text/event-stream',
                 headers={'Cache-Control': 'no-cache'}
             )
+
+    def handle_multimodal_chat_stream(self):
+        """Handle streaming chat responses with multimodal data"""
+        try:
+            data = request.json
+            user_message = data.get('message', '').strip()
+            conversation_id = data.get('conversation_id')
+            model_name = data.get('model', self.DEFAULT_MODEL)
+            image_parts_b64 = data.get('image_parts', [])
+
+            if not user_message and not image_parts_b64:
+                yield f"data: {json.dumps({'error': 'Missing message or image data'})}\n\n"
+                return
+
+            # Construct the prompt for the model
+            prompt_parts = []
+            if user_message:
+                prompt_parts.append(user_message)
+
+            # Decode base64 images and add them to the prompt
+            for img_data in image_parts_b64:
+                try:
+                    # Assumes img_data is a dict like {'mime_type': 'image/jpeg', 'data': '...'}
+                    image_bytes = base64.b64decode(img_data['data'])
+                    pil_image = Image.open(BytesIO(image_bytes))
+                    prompt_parts.append(pil_image)
+                except Exception as e:
+                    yield f"data: {json.dumps({'error': f'Failed to process image: {e}'})}\n\n"
+                    return
+
+            # Generate response
+            full_response = ""
+            try:
+                model = genai.GenerativeModel(model_name)
+                response_stream = model.generate_content(prompt_parts, stream=True)
+                
+                for chunk in response_stream:
+                    if chunk.text:
+                        full_response += chunk.text
+                        yield f"data: {json.dumps({'text': chunk.text})}\n\n"
+                        
+            except Exception as e:
+                error_msg = f"Generation error: {str(e)}"
+                yield f"data: {json.dumps({'error': error_msg})}\n\n"
+                return
+                
+            # Save to database
+            try:
+                conn = self.get_db()
+                cursor = conn.cursor()
+                # For simplicity, we'll just note that images were part of the context
+                context_info = json.dumps([f"image_attachment_count: {len(image_parts_b64)}"])
+                cursor.execute("""
+                    INSERT INTO history (conversation_id, user_message, bot_response, context_info)
+                    VALUES (?, ?, ?, ?)
+                """, (conversation_id, user_message, full_response, context_info))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                print(f"Database save error: {e}")
+                
+            yield f"data: {json.dumps({'done': True})}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({'error': f'Unexpected error: {str(e)}'})}\n\n"
             
     def handle_chat_stream(self):
         """Handle streaming chat responses"""

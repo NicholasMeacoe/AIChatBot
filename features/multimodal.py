@@ -5,6 +5,7 @@ import requests
 import tempfile
 from io import BytesIO
 import json
+import google.generativeai.types as types
 
 class MultiModalProcessor:
     def __init__(self):
@@ -49,7 +50,7 @@ class MultiModalProcessor:
             buffer = BytesIO()
             img.save(buffer, format='JPEG', quality=85)
             img.close()  # Explicitly close the image
-            img_data = base64.b64encode(buffer.getvalue()).decode()
+            img_data = buffer.getvalue()
             
             return {
                 'type': 'image',
@@ -94,23 +95,45 @@ class MultiModalProcessor:
         }
     
     def get_image_context_for_gemini(self, file_path):
-        """Get image data formatted specifically for Gemini Vision API"""
+        """Get image data formatted for the Gemini Vision API."""
         image_data = self._process_image(file_path)
         if image_data and image_data.get('type') == 'image':
+            # For older library versions, we might just need the raw data and mime type
             return {
-                'mime_type': image_data['mime_type'],
-                'data': image_data['data']
+                "data": image_data['data'],
+                "mime_type": image_data['mime_type']
             }
         return None
-    
+
     def create_multimodal_prompt(self, text_prompt, image_paths=None):
-        """Create a multimodal prompt combining text and images for Gemini"""
-        parts = [text_prompt]
+        """Create a multimodal prompt combining text and images for Gemini."""
+        # This now constructs a list of dicts, compatible with older and some newer client versions
+        parts = [{"type": "text", "text": text_prompt}]
         
         if image_paths:
             for image_path in image_paths:
                 image_context = self.get_image_context_for_gemini(image_path)
                 if image_context:
-                    parts.append(image_context)
-        
-        return parts
+                    # The google-generativeai library expects PIL Image objects
+                    try:
+                        img = Image.open(BytesIO(image_context['data']))
+                        parts.append(img)
+                    except Exception as e:
+                        print(f"Error converting image data to PIL Image: {e}")
+
+        # The final prompt for generate_content should be just the list of parts
+        # The text part is now the first element of the list.
+        # We need to adjust the calling function to handle this.
+        # Let's adjust the structure to be a list of the text prompt and then the images
+        final_prompt_parts = [text_prompt]
+        if image_paths:
+            for image_path in image_paths:
+                processed_image = self._process_image(image_path)
+                if processed_image and processed_image.get('type') == 'image':
+                    try:
+                        img = Image.open(BytesIO(processed_image['data']))
+                        final_prompt_parts.append(img)
+                    except Exception as e:
+                        print(f"Error creating PIL image: {e}")
+
+        return final_prompt_parts

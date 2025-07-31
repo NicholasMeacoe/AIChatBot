@@ -52,7 +52,7 @@ def create_app():
             print("Warning: Gemini API could not be configured. Chat features will be unavailable.")
         else:
             print("Pre-fetching available Gemini models...")
-            get_available_models(force_refresh=True)
+            get_available_models()
     # else:
         # For testing, client is configured by test fixtures.
         # The app() fixture in conftest.py ensures GOOGLE_API_KEY is patched in config

@@ -111,52 +111,48 @@ def mock_gemini_client(monkeypatch):
     """Mocks the Gemini API client used in gemini_utils.py for each test function."""
     # Clear gemini_utils cache and client before each test using this fixture
     monkeypatch.setattr('gemini_utils.FETCHED_MODELS_CACHE', [], raising=False) # Corrected cache name
-    monkeypatch.setattr('gemini_utils.client', None, raising=False)
 
     # GOOGLE_API_KEY is set by the 'app' fixture.
-    # We patch genai.Client so that when gemini_utils.configure_client calls it,
-    # it receives our mock instance. This instance is then stored in gemini_utils.client.
-    with patch('gemini_utils.genai.Client') as MockedGenaiClientClass:
-        mock_genai_client_instance = MagicMock() # This is the mock for the genai.Client *instance*
-        MockedGenaiClientClass.return_value = mock_genai_client_instance
+    # We patch genai.GenerativeModel so that when gemini_utils functions call it,
+    # it receives our mock instance.
+    with patch('gemini_utils.genai.GenerativeModel') as MockedGenerativeModel:
+        mock_model_instance = MagicMock() # This is the mock for the genai.GenerativeModel *instance*
+        MockedGenerativeModel.return_value = mock_model_instance
 
-        # Configure the mock genai.Client instance's 'models' attribute
-        mock_models_object = MagicMock() # This will be mock_genai_client_instance.models
-        mock_genai_client_instance.models = mock_models_object
+        # 1. Mock list_models for get_available_models()
+        mock_sdk_model_default = MagicMock()
+        mock_sdk_model_default.name = f"models/{DEFAULT_MODEL_NAME}"
+        mock_sdk_model_default.supported_generation_methods=['generateContent']
 
-        # 1. Mock client.models.list() for get_available_models()
-        # It should return a list of objects that have 'name' and 'supported_actions' attributes.
-        # Using genai.types.Model for spec if available, else MagicMock.
-        # For simplicity, using MagicMock and ensuring attributes are present.
-        mock_sdk_model_default = MagicMock(supported_actions=['generateContent']) # As per gemini_utils logic
-        mock_sdk_model_default.name = f"models/{DEFAULT_MODEL_NAME}" # Set 'name' as an attribute
+        mock_sdk_model_pro = MagicMock()
+        mock_sdk_model_pro.name = "models/gemini-1.0-pro"
+        mock_sdk_model_pro.supported_generation_methods=['generateContent']
 
-        mock_sdk_model_pro = MagicMock(supported_actions=['generateContent'])
-        mock_sdk_model_pro.name = "models/gemini-1.0-pro" # Set 'name' as an attribute
+        # This is a change from the original code. list_models is a function on the genai module, not the model instance.
+        monkeypatch.setattr('gemini_utils.genai.list_models', lambda: [mock_sdk_model_default, mock_sdk_model_pro])
 
-        mock_models_object.list.return_value = [mock_sdk_model_default, mock_sdk_model_pro]
 
-        # 2. Mock client.models.generate_content_stream() for generate_response_stream()
+        # 2. Mock generate_content for generate_response_stream() and generate_response()
         mock_stream_chunk_1 = MagicMock()
         mock_stream_chunk_1.text = "Test response chunk 1."
         mock_stream_chunk_2 = MagicMock()
         mock_stream_chunk_2.text = "Test response chunk 2."
-        # This method is an iterable (stream)
-        mock_models_object.generate_content_stream.return_value = iter([mock_stream_chunk_1, mock_stream_chunk_2])
-
-        # 3. Mock client.models.generate_content() for generate_summary()
-        mock_summary_response = MagicMock() # This is a GenerateContentResponse object
+        
+        mock_summary_response = MagicMock()
         mock_summary_response.text = "Test summary response."
-        mock_models_object.generate_content.return_value = mock_summary_response
 
-        # Now, call the actual configure_client function from gemini_utils.
-        # This will execute `client = genai.Client(api_key=GOOGLE_API_KEY)`,
-        # which, due to our patch, will set `gemini_utils.client` to `mock_genai_client_instance`.
+        # Have generate_content return a stream for streaming calls, and a single response for non-streaming.
+        def side_effect(*args, **kwargs):
+            if kwargs.get('stream'):
+                return iter([mock_stream_chunk_1, mock_stream_chunk_2])
+            return mock_summary_response
+
+        mock_model_instance.generate_content.side_effect = side_effect
+        
         import gemini_utils
         gemini_utils.configure_client()
 
-        # Yield the now-mocked gemini_utils.client
-        yield gemini_utils.client
+        yield mock_model_instance
 
 @pytest.fixture(scope='function')
 def mock_requests_get():
