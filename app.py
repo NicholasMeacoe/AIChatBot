@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 import html
 import base64
 import uuid
+from features.multimodal import MultiModalProcessor
 
 # Load environment variables
 load_dotenv()
@@ -41,6 +42,7 @@ class GeminiChatApp:
         self.ensure_directories()
         
         # Initialize components
+        self.multimodal_processor = MultiModalProcessor()
         self.setup_gemini()
         self.init_database()
         self.setup_routes()
@@ -338,6 +340,54 @@ class GeminiChatApp:
                 'image_files': image_files
             })
         
+        @self.app.route('/api/multimedia/formats', methods=['GET'])
+        def get_supported_formats():
+            """Get supported multimedia formats"""
+            try:
+                formats = self.multimodal_processor.get_supported_formats()
+                return jsonify({
+                    'supported_formats': formats,
+                    'total_formats': sum(len(formats[key]) for key in formats)
+                })
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/multimedia/analyze', methods=['POST'])
+        def analyze_multimedia_file():
+            """Analyze a multimedia file and return metadata"""
+            try:
+                data = request.json
+                file_path = data.get('file_path')
+                
+                if not file_path:
+                    return jsonify({'error': 'Missing file_path parameter'}), 400
+                
+                # Ensure file is in allowed context directory
+                abs_path = os.path.abspath(file_path)
+                if not abs_path.startswith(self.ALLOWED_CONTEXT_DIR):
+                    return jsonify({'error': 'File access denied'}), 403
+                
+                if not os.path.exists(abs_path):
+                    return jsonify({'error': 'File not found'}), 404
+                
+                # Process the file
+                result = self.multimodal_processor.process_file(abs_path)
+                
+                # Remove binary data from response for JSON serialization
+                if result.get('type') == 'image' and 'data' in result:
+                    result['data_size'] = len(result['data'])
+                    del result['data']
+                elif result.get('type') == 'video' and 'frames' in result:
+                    for frame in result['frames']:
+                        if 'data' in frame:
+                            frame['data_size'] = len(frame['data'])
+                            del frame['data']
+                
+                return jsonify(result)
+                
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        
         @self.app.route('/api/chat_multimodal', methods=['POST'])
         def chat_multimodal():
             """Handle multimodal chat with image support"""
@@ -348,16 +398,17 @@ class GeminiChatApp:
             )
 
     def handle_multimodal_chat_stream(self):
-        """Handle streaming chat responses with multimodal data"""
+        """Handle streaming chat responses with enhanced multimodal data (images, audio, video)"""
         try:
             data = request.json
             user_message = data.get('message', '').strip()
             conversation_id = data.get('conversation_id')
             model_name = data.get('model', self.DEFAULT_MODEL)
             image_parts_b64 = data.get('image_parts', [])
+            multimedia_files = data.get('multimedia_files', [])  # New: support for uploaded multimedia files
 
-            if not user_message and not image_parts_b64:
-                yield f"data: {json.dumps({'error': 'Missing message or image data'})}\n\n"
+            if not user_message and not image_parts_b64 and not multimedia_files:
+                yield f"data: {json.dumps({'error': 'Missing message or multimedia data'})}\n\n"
                 return
 
             # Construct the prompt for the model
@@ -365,15 +416,78 @@ class GeminiChatApp:
             if user_message:
                 prompt_parts.append(user_message)
 
-            # Decode base64 images and add them to the prompt
+            # Process base64 images (existing functionality)
             for img_data in image_parts_b64:
                 try:
-                    # Assumes img_data is a dict like {'mime_type': 'image/jpeg', 'data': '...'}
                     image_bytes = base64.b64decode(img_data['data'])
                     pil_image = Image.open(BytesIO(image_bytes))
                     prompt_parts.append(pil_image)
                 except Exception as e:
                     yield f"data: {json.dumps({'error': f'Failed to process image: {e}'})}\n\n"
+                    return
+
+            # Process multimedia files (new functionality)
+            multimedia_context = []
+            for file_info in multimedia_files:
+                try:
+                    file_path = file_info.get('path')
+                    if file_path and os.path.exists(file_path):
+                        # Ensure file is in allowed context directory
+                        if not os.path.abspath(file_path).startswith(self.ALLOWED_CONTEXT_DIR):
+                            yield f"data: {json.dumps({'error': f'File access denied: {file_path}'})}\n\n"
+                            return
+                        
+                        file_type = self.multimodal_processor.detect_file_type(file_path)
+                        
+                        if file_type == 'image':
+                            # Process image and add to prompt
+                            processed_image = self.multimodal_processor._process_image(file_path)
+                            if processed_image and processed_image.get('type') == 'image':
+                                pil_image = Image.open(BytesIO(processed_image['data']))
+                                prompt_parts.append(pil_image)
+                                multimedia_context.append(f"Image: {os.path.basename(file_path)}")
+                        
+                        elif file_type == 'audio':
+                            # Process audio and add transcription to prompt
+                            audio_context = self.multimodal_processor.get_audio_context_for_gemini(file_path)
+                            if audio_context:
+                                audio_description = f"\n[AUDIO FILE: {os.path.basename(file_path)}]\n"
+                                metadata = audio_context.get('metadata', {})
+                                if metadata.get('duration') != 'Unknown':
+                                    audio_description += f"Duration: {metadata.get('duration')}s\n"
+                                
+                                transcription = audio_context.get('transcription', '')
+                                if transcription and not transcription.startswith('['):
+                                    audio_description += f"Transcription: {transcription}\n"
+                                else:
+                                    audio_description += f"Transcription status: {transcription}\n"
+                                
+                                prompt_parts.append(audio_description)
+                                multimedia_context.append(f"Audio: {os.path.basename(file_path)}")
+                        
+                        elif file_type == 'video':
+                            # Process video and add frames to prompt
+                            video_frames = self.multimodal_processor.get_video_frames_for_gemini(file_path)
+                            if video_frames:
+                                video_data = self.multimodal_processor._process_video(file_path)
+                                metadata = video_data.get('metadata', {})
+                                
+                                video_description = f"\n[VIDEO FILE: {os.path.basename(file_path)}]\n"
+                                video_description += f"Duration: {metadata.get('duration', 'Unknown')}s, "
+                                video_description += f"Resolution: {metadata.get('resolution', 'Unknown')}\n"
+                                video_description += f"Extracted {len(video_frames)} key frames:\n"
+                                
+                                prompt_parts.append(video_description)
+                                
+                                # Add the key frames
+                                for i, frame_info in enumerate(video_frames):
+                                    prompt_parts.append(f"Frame {i+1} (at {frame_info['timestamp']}s):")
+                                    prompt_parts.append(frame_info['image'])
+                                
+                                multimedia_context.append(f"Video: {os.path.basename(file_path)} ({len(video_frames)} frames)")
+                        
+                except Exception as e:
+                    yield f"data: {json.dumps({'error': f'Failed to process multimedia file: {e}'})}\n\n"
                     return
 
             # Generate response
@@ -396,12 +510,18 @@ class GeminiChatApp:
             try:
                 conn = self.get_db()
                 cursor = conn.cursor()
-                # For simplicity, we'll just note that images were part of the context
-                context_info = json.dumps([f"image_attachment_count: {len(image_parts_b64)}"])
+                
+                # Create comprehensive context info
+                context_info = []
+                if image_parts_b64:
+                    context_info.append(f"image_attachments: {len(image_parts_b64)}")
+                if multimedia_context:
+                    context_info.extend(multimedia_context)
+                
                 cursor.execute("""
                     INSERT INTO history (conversation_id, user_message, bot_response, context_info)
                     VALUES (?, ?, ?, ?)
-                """, (conversation_id, user_message, full_response, context_info))
+                """, (conversation_id, user_message, full_response, json.dumps(context_info)))
                 conn.commit()
                 conn.close()
             except Exception as e:
@@ -507,7 +627,7 @@ class GeminiChatApp:
             return "", f"Error fetching URL {url}: {str(e)}"
             
     def process_file_context(self, file_path):
-        """Process file/folder context"""
+        """Process file/folder context with enhanced multimodal support"""
         try:
             clean_path = file_path.strip().strip("'\"")
             
@@ -524,12 +644,77 @@ class GeminiChatApp:
                 file_size = os.path.getsize(full_path)
                 if file_size > self.MAX_FILE_READ_BYTES:
                     return "", f"File too large: {file_path}"
+                
+                # Check if this is a multimedia file
+                if self.multimodal_processor.is_multimedia_file(full_path):
+                    file_type = self.multimodal_processor.detect_file_type(full_path)
                     
-                with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
+                    if file_type == 'image':
+                        # For images, provide description and metadata
+                        processed_image = self.multimodal_processor._process_image(full_path)
+                        if processed_image and processed_image.get('type') == 'image':
+                            metadata = processed_image.get('metadata', {})
+                            context = f"\n--- IMAGE: {clean_path} ---\n"
+                            context += f"Size: {metadata.get('original_size', 'Unknown')}\n"
+                            context += f"Format: {metadata.get('format', 'Unknown')}\n"
+                            context += f"File size: {metadata.get('file_size', 'Unknown')} bytes\n"
+                            context += "--- END IMAGE ---\n\n"
+                            return context, None
                     
-                context = f"\n--- FILE: {clean_path} ---\n{content}\n--- END FILE ---\n\n"
-                return context, None
+                    elif file_type == 'audio':
+                        # For audio, provide transcription and metadata
+                        audio_context = self.multimodal_processor.get_audio_context_for_gemini(full_path)
+                        if audio_context:
+                            metadata = audio_context.get('metadata', {})
+                            context = f"\n--- AUDIO: {clean_path} ---\n"
+                            if metadata.get('duration') != 'Unknown':
+                                context += f"Duration: {metadata.get('duration')}s\n"
+                            if metadata.get('format'):
+                                context += f"Format: {metadata.get('format')}\n"
+                            
+                            transcription = audio_context.get('transcription', '')
+                            if transcription and not transcription.startswith('['):
+                                context += f"Transcription: {transcription}\n"
+                            else:
+                                context += f"Transcription status: {transcription}\n"
+                            context += "--- END AUDIO ---\n\n"
+                            return context, None
+                    
+                    elif file_type == 'video':
+                        # For video, provide metadata and frame information
+                        video_data = self.multimodal_processor._process_video(full_path)
+                        if video_data and video_data.get('type') == 'video':
+                            metadata = video_data.get('metadata', {})
+                            frames = video_data.get('frames', [])
+                            
+                            context = f"\n--- VIDEO: {clean_path} ---\n"
+                            context += f"Duration: {metadata.get('duration', 'Unknown')}s\n"
+                            context += f"Resolution: {metadata.get('resolution', 'Unknown')}\n"
+                            context += f"FPS: {metadata.get('fps', 'Unknown')}\n"
+                            context += f"Frame count: {metadata.get('frame_count', 'Unknown')}\n"
+                            
+                            if frames:
+                                context += f"Extracted {len(frames)} key frames for analysis\n"
+                                for i, frame in enumerate(frames):
+                                    context += f"Frame {i+1}: timestamp {frame.get('timestamp', 0)}s\n"
+                            
+                            context += "--- END VIDEO ---\n\n"
+                            return context, None
+                
+                # For regular text files, read content as before
+                try:
+                    with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                        
+                    context = f"\n--- FILE: {clean_path} ---\n{content}\n--- END FILE ---\n\n"
+                    return context, None
+                except UnicodeDecodeError:
+                    # If it's not a text file and not multimedia, provide basic info
+                    context = f"\n--- BINARY FILE: {clean_path} ---\n"
+                    context += f"File size: {file_size} bytes\n"
+                    context += "Binary file - content not displayed\n"
+                    context += "--- END BINARY FILE ---\n\n"
+                    return context, None
                 
             elif os.path.isdir(full_path):
                 items = os.listdir(full_path)

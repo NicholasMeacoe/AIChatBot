@@ -347,21 +347,70 @@ def process_context_path_with_multimodal(path):
                 processed_path_info["has_visual_content"] = True
                 
             elif multimodal_data.get('type') == 'audio':
-                # For audio, add transcription to context
+                # For audio, add transcription and metadata to context
                 audio_context = f"\n[AUDIO: {multimodal_data.get('description', 'Audio file')}]\n"
+                if multimodal_data.get('metadata'):
+                    metadata = multimodal_data['metadata']
+                    if metadata.get('duration') != 'Unknown':
+                        audio_context += f"Duration: {metadata.get('duration')}s, "
+                    if metadata.get('format'):
+                        audio_context += f"Format: {metadata.get('format')}, "
+                    if metadata.get('bitrate') != 'Unknown':
+                        audio_context += f"Bitrate: {metadata.get('bitrate')}\n"
+                    else:
+                        audio_context += "\n"
+                
                 if multimodal_data.get('transcription'):
-                    audio_context += f"Transcription: {multimodal_data['transcription']}\n"
+                    transcription = multimodal_data['transcription']
+                    if transcription and not transcription.startswith('['):
+                        audio_context += f"Transcription: {transcription}\n"
+                    else:
+                        audio_context += f"Transcription status: {transcription}\n"
                 
                 context_str += audio_context
                 processed_path_info["multimodal_type"] = "audio"
+                processed_path_info["has_audio_content"] = True
                 
             elif multimodal_data.get('type') == 'video':
-                # For video, add description to context
+                # For video, add description and frame information to context
                 video_context = f"\n[VIDEO: {multimodal_data.get('description', 'Video file')}]\n"
+                if multimodal_data.get('metadata'):
+                    metadata = multimodal_data['metadata']
+                    video_context += f"Duration: {metadata.get('duration', 'Unknown')}s, "
+                    video_context += f"Resolution: {metadata.get('resolution', 'Unknown')}, "
+                    video_context += f"FPS: {metadata.get('fps', 'Unknown')}\n"
+                
+                frames = multimodal_data.get('frames', [])
+                if frames:
+                    video_context += f"Extracted {len(frames)} key frames for analysis\n"
+                    for i, frame in enumerate(frames):
+                        video_context += f"Frame {i+1}: timestamp {frame.get('timestamp', 0)}s\n"
+                
                 context_str += video_context
                 processed_path_info["multimodal_type"] = "video"
+                processed_path_info["has_visual_content"] = True
     
     return context_str, error_msg, processed_path_info, multimodal_data
+
+def get_multimedia_context_items(context_items):
+    """
+    Extract multimedia files from context items and return their processed data.
+    Used for preparing multimodal prompts for Gemini Vision and text processing.
+    """
+    multimedia_items = []
+    
+    for item in context_items:
+        if item.get("resolved"):
+            file_path = item["resolved"]
+            if multimodal_processor.is_multimedia_file(file_path):
+                file_type = multimodal_processor.detect_file_type(file_path)
+                multimedia_items.append({
+                    'path': file_path,
+                    'type': file_type,
+                    'original_path': item.get('original', file_path)
+                })
+    
+    return multimedia_items
 
 def get_image_context_items(context_items):
     """
